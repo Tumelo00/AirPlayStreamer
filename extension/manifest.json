@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "AirPlay Video Sync",
+  "version": "1.0",
+  "description": "Video'yu AirPlay ses gecikmesiyle senkronize eder",
+  "permissions": ["storage"],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AirPlay Video Sync",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  }
+}

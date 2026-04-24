@@ -1,0 +1,7 @@
+pyatv>=0.14.0,<0.16
+PyAudioWPatch>=0.2.12
+customtkinter>=5.2.0
+numpy
+pystray
+Pillow
+pyinstaller

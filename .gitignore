@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# App specific
+*.log
+test_capture.png
+netflix_test.png
+settings.json
+credentials.json
+
+# Extension - exclude build artifacts but keep source
+extension/*.crx
+extension/*.pem

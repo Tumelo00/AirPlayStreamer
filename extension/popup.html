@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 280px;
+    padding: 16px;
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+    background: #1a1a2e;
+    color: #fff;
+  }
+  h2 { font-size: 15px; margin-bottom: 12px; }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  label { font-size: 12px; color: #a0a0b0; }
+  .toggle {
+    width: 44px; height: 24px;
+    background: #333;
+    border-radius: 12px;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s;
+  }
+  .toggle.active { background: #e94560; }
+  .toggle::after {
+    content: '';
+    width: 18px; height: 18px;
+    background: #fff;
+    border-radius: 50%;
+    position: absolute;
+    top: 3px; left: 3px;
+    transition: left 0.2s;
+  }
+  .toggle.active::after { left: 23px; }
+  input[type=range] {
+    width: 100%;
+    accent-color: #e94560;
+    margin: 6px 0;
+  }
+  .value {
+    font-size: 20px;
+    font-weight: bold;
+    color: #e94560;
+    text-align: center;
+  }
+  .hint {
+    font-size: 10px;
+    color: #6c6c80;
+    text-align: center;
+    margin-top: 8px;
+  }
+  .status {
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    text-align: center;
+    margin-top: 10px;
+  }
+  .status.on { background: rgba(46,213,115,0.15); color: #2ed573; }
+  .status.off { background: rgba(108,108,128,0.15); color: #6c6c80; }
+</style>
+</head>
+<body>
+  <h2>AirPlay Video Sync</h2>
+
+  <div class="row">
+    <label>Video Gecikmesi</label>
+    <div class="toggle" id="toggle"></div>
+  </div>
+
+  <div class="value" id="delayValue">1.0 sn</div>
+  <input type="range" id="slider" min="200" max="3000" step="50" value="1000">
+
+  <div class="hint">Gecikmeyi AirPlay ile eslesene kadar ayarla</div>
+  <div class="status off" id="status">Kapali</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
