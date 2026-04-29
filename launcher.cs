@@ -16,7 +16,7 @@ using Microsoft.Win32;
 class Launcher
 {
     const string VC_REDIST_URL = "https://aka.ms/vs/17/release/vc_redist.x64.exe";
-    const string MAIN_EXE = "AirPlayStreamer.exe";
+    const string MAIN_EXE = "AirPlayStreamer-Core.exe";
 
     [STAThread]
     static int Main()
