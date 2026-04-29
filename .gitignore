@@ -32,3 +32,7 @@ credentials.json
 # Extension - exclude build artifacts but keep source
 extension/*.crx
 extension/*.pem
+
+AirPlayStreamer-Windows.zip
+AirPlayStreamer-Extension.zip
+*.zip

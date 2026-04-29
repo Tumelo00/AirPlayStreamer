@@ -56,7 +56,7 @@ class DeviceManager:
     async def _get_storage(self) -> FileStorage:
         if self._storage is None:
             cred_file = os.path.join(CREDENTIALS_DIR, "credentials.json")
-            self._storage = FileStorage(cred_file, asyncio.get_event_loop())
+            self._storage = FileStorage(cred_file, asyncio.get_running_loop())
             await self._storage.load()
         return self._storage
 
@@ -66,7 +66,7 @@ class DeviceManager:
 
         storage = await self._get_storage()
         configs = await pyatv.scan(
-            asyncio.get_event_loop(),
+            asyncio.get_running_loop(),
             timeout=timeout,
             storage=storage,
         )
@@ -123,7 +123,7 @@ class DeviceManager:
             pairing = await pyatv.pair(
                 device.config,
                 protocol=Protocol.AirPlay,
-                loop=asyncio.get_event_loop(),
+                loop=asyncio.get_running_loop(),
                 storage=storage,
             )
 
@@ -159,7 +159,7 @@ class DeviceManager:
             storage = await self._get_storage()
             atv = await pyatv.connect(
                 device.config,
-                loop=asyncio.get_event_loop(),
+                loop=asyncio.get_running_loop(),
                 storage=storage,
             )
 

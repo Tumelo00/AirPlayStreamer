@@ -48,12 +48,19 @@ class LiveAudioSource(AudioSource):
         )
 
     async def close(self) -> None:
-        self._stopped = True
-        self._buffer.unregister_reader(self._reader_id)
+        self._unregister_once()
 
     def stop(self):
+        self._unregister_once()
+
+    def _unregister_once(self):
+        if self._stopped:
+            return
         self._stopped = True
-        self._buffer.unregister_reader(self._reader_id)
+        try:
+            self._buffer.unregister_reader(self._reader_id)
+        except Exception:
+            pass
 
     @property
     def sample_rate(self) -> int:

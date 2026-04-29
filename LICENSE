@@ -1,0 +1,213 @@
+AIRPLAY STREAMER - OZEL KULLANIM LISANSI
+Sahip: Tumer Ustunel
+Yayim Tarihi: 2026
+
+Telif Hakki (c) 2026 Tumer Ustunel. Tum haklari saklidir.
+
+================================================================================
+1. TANIMLAR
+================================================================================
+
+"Yazilim" terimi, AirPlay Streamer adli uygulamayi, ilgili tarayici uzantisini,
+kaynak kodlari, derleme dosyalarini, dokumantasyonu, ikonlari, gorsel
+materyalleri, yapilandirma dosyalarini ve bunlarla birlikte dagitilan tum ekleri
+ifade eder.
+
+"Sahip" terimi, Yazilim'in telif hakki sahibini (Tumer Ustunel) ifade eder.
+
+"Kullanici" terimi, bu lisans kapsaminda Yazilim'i kullanma hakki kazanan
+gercek veya tuzel kisiyi ifade eder.
+
+"Kisisel Kullanim" terimi, ticari amac gutmeyen, gelir elde etmeye yonelik
+olmayan, bireysel kullanim ile sinirli kullanim bicimini ifade eder.
+
+"Turetilmis Calisma" terimi, Yazilim'in tamamindan veya bir bolumunden
+turetilen, degistirilen, uyarlanan veya genisletilen her turlu calismayi ifade
+eder.
+
+================================================================================
+2. VERILEN HAKLAR
+================================================================================
+
+Bu Lisans cercevesinde, Sahip Kullanici'ya asagidaki haklari, geri alinabilir,
+ozel olmayan, devredilemez ve telifsiz olarak verir:
+
+2.1. Kisisel kullanim amaciyla Yazilim'i indirme, yukleme ve calistirma hakki.
+
+2.2. Kisisel calisma ve egitim amaciyla kaynak kodu inceleme hakki.
+
+2.3. Hatalari raporlama, oneride bulunma ve katki gondermek icin gerekli
+     degisiklikleri yapma hakki (degisikliklerin Sahip'e geri sunulmasi
+     kosuluyla).
+
+2.4. Yazilim'in calisma sekli hakkinda yorum ve elestiri yazma, akademik
+     amacli alintilarda bulunma hakki.
+
+2.5. Ev veya bireysel ag ortaminda, ticari amac gudulmemek kaydiyla, ses ve
+     video sunulmasi icin Yazilim'i kullanma hakki.
+
+================================================================================
+3. KISITLAMALAR
+================================================================================
+
+Asagidaki eylemler, Sahip'in onceden yazili izni alinmaksizin yasaktir:
+
+3.1. TICARI KULLANIM YASAGI
+Yazilim'in herhangi bir bolumunun ticari, paral i veya gelir getirici amaclarla
+kullanilmasi yasaktir. Bu, ancak bunlarla sinirli olmamak uzere, su faaliyetleri
+icerir:
+  - Yazilim'i veya turevini ucret karsiligi satma, kiralama, lisanslama
+  - Reklam destekli surumler olusturma ve dagitma
+  - SaaS (yazilim hizmeti) modeli ile sunma
+  - Isletme operasyonlarinda kullanma (kafe, ofis, magaza, etkinlik vb.)
+  - Yazilim ile uretilen icerigi para karsiligi satma
+
+3.2. YENIDEN DAGITIM YASAGI
+Yazilim'in degistirilmis veya degistirilmemis halini ucretli olarak yeniden
+dagitma, paketleyip baska urun olarak satma, ticari paketlere dahil etme
+yasaktir. Ucretsiz dagitim icin Sahip'ten yazili izin alinmasi gerekir ve bu
+durumda bile asgari atif kosullari (bkz. 5. madde) saglanmalidir.
+
+3.3. MARKA VE ISIM KULLANIMI
+"AirPlay Streamer" ismi, ikon, logo ve gorsel kimlik unsurlarinin Sahip'in izni
+olmaksizin kullanilmasi, taklit edilmesi veya benzer urunler icin kullanilmasi
+yasaktir. AirPlay markasi Apple Inc.'in tescilli markasidir; bu Yazilim
+Apple Inc. ile iliskili degildir, onaylanmamistir, sponsorlu degildir.
+
+3.4. TERS MUHENDISLIK
+Yazilim'in DRM, lisans dogrulama veya guvenlik mekanizmalarini etkisiz birakmak
+amaciyla ters muhendislik yapilmasi, dis arac kullanarak modifiye edilmesi
+yasaktir. Akademik ve egitim amacli inceleme bu yasagin disindadir.
+
+3.5. KOTU NIYETLI KULLANIM
+Yazilim, yetkisiz ses/video aktarimi, telif hakki ihlali, gizlilik ihlali veya
+benzeri hukuka aykiri amaclar icin kullanilamaz. Kullanici, kullandigi
+icerigin telif haklarina sahip oldugundan veya bu icerigi yayinlama hakkina
+sahip oldugundan emin olmak zorundadir.
+
+3.6. ALT LISANSLAMA
+Bu Lisans ile verilen haklar alt lisans yoluyla devredilemez. Her Kullanici
+Yazilim'i bu Lisans dogrudan kabulu yoluyla almak zorundadir.
+
+================================================================================
+4. UCUNCU TARAF BILESENLERI
+================================================================================
+
+Yazilim, asagidakileri iceren ucuncu taraf acik kaynak kutuphanelere baglidir:
+
+  - pyatv (MIT Lisansi) - https://github.com/postlund/pyatv
+  - PyAudioWPatch (MIT Lisansi)
+  - customtkinter (MIT Lisansi)
+  - numpy (BSD Lisansi)
+  - cryptography (Apache 2.0 / BSD Lisansi)
+  - miniaudio (Public Domain)
+  - pystray, Pillow (MIT/PIL Lisansi)
+  - zeroconf (LGPL Lisansi)
+
+Her bir bilesen kendi orijinal lisansina tabidir. Kullanici bu lisanslara da
+uymak zorundadir. Yazilim'in EXE paketi icinde dagitilan bu kutuphanelerin
+lisans metinleri ilgili paket dosyalarinda yer almaktadir.
+
+================================================================================
+5. ATIF VE BILDIRIM
+================================================================================
+
+Yazilim'i kisisel projelerde, blog yazilarinda, video icerikte veya benzeri
+mecralarda paylasirken asagidaki atif zorunludur:
+
+  "AirPlay Streamer - (c) Tumer Ustunel
+   GitHub: https://github.com/Tumelo00/AirPlayStreamer"
+
+Atif yapilmadan paylasimlar lisans ihlali sayilir.
+
+================================================================================
+6. GARANTI REDDI
+================================================================================
+
+YAZILIM, "OLDUGU GIBI" SUNULMAKTADIR. SAHIP, AÇIK VEYA ZIMNI HIÇBIR GARANTI
+VERMEZ; BUNLAR ASAĞIDAKILERI ICERIR ANCAK BUNLARLA SINIRLI DEGILDIR:
+
+  - SATILABILIRLIK GARANTISI
+  - BELLI BIR AMACA UYGUNLUK GARANTISI
+  - HATA VEYA KESINTI YASANMAYACAGI GARANTISI
+  - UCUNCU TARAFLARIN HAKLARININ IHLAL EDILMEYECEGI GARANTISI
+  - VERILERIN KAYBOLMAYACAGI GARANTISI
+
+KULLANICI, YAZILIM'I KULLANMAKTAN KAYNAKLI TUM RISKI USTLENIR. SAHIP, YAZILIM'IN
+HOMEPOD, AIRPLAY UYUMLU CIHAZLAR VEYA WINDOWS ISLETIM SISTEMLERINDE TAM OLARAK
+CALISACAGINI GARANTI ETMEZ. APPLE INC.'IN PROTOKOL DEGISIKLIKLERI VEYA YAZILIM
+GUNCELLEMELERI YAZILIM'I CALISMAZ HALE GETIREBILIR.
+
+================================================================================
+7. SORUMLULUK SINIRLAMASI
+================================================================================
+
+YASAL OLARAK IZIN VERILEN AZAMI OLCUDE, SAHIP HICBIR DURUMDA ASAGIDAKI
+ZARARLARDAN SORUMLU TUTULAMAZ:
+
+  - DOLAYLI, OZEL, ARIZI, CEZALANDIRICI VEYA SONUC OLARAK ORTAYA CIKAN ZARARLAR
+  - VERI KAYBI, KAR KAYBI, IS KESINTISI, ITIBAR KAYBI
+  - DONANIM ARIZASI, HOMEPOD VEYA DIGER CIHAZLARIN ZARAR GORMESI
+  - AĞ TRAFIK MALIYETLERI, INTERNET SERVIS SAGLAYICI ICERIK CEZALARI
+  - UCUNCU TARAFLARLA YASANAN HUKUKI ANLASMAZLIKLAR
+  - YAZILIM'IN APPLE INC.'IN HIZMET KOSULLARINI IHLAL ETMESINDEN DOGAN ZARARLAR
+
+SAHIP'IN BU LISANS ALTINDAKI TOPLAM SORUMLULUGU, KULLANICI TARAFINDAN YAZILIM
+ICIN ODENMIS BEDEL ILE SINIRLIDIR (Yazilim ucretsiz dagitildigindan bu deger
+SIFIR Turk Lirasidir).
+
+================================================================================
+8. GIZLILIK
+================================================================================
+
+Yazilim, Kullanici hakkinda kisisel veri toplamaz, dis sunucularla iletisim
+kurmaz (mDNS ile yerel agdaki AirPlay cihazlarini aramasi haricinde) ve
+analitik gondermez. Tum yapilandirma yerel olarak %APPDATA%\AirPlayStreamer\
+dizininde saklanir.
+
+================================================================================
+9. LISANSIN SONA ERMESI
+================================================================================
+
+Bu Lisans, Kullanici tarafindan herhangi bir kosulun ihlali halinde otomatik
+olarak ve uyari olmaksizin sona erer. Sona erme durumunda Kullanici:
+
+  - Yazilim'in tum kopyalarini silmek
+  - Turetilmis calismalarin dagitimini durdurmak
+  - Sahibin talep edebilecegi diger telafi onlemlerini almak
+
+zorundadir. Sahip, Lisans ihlali halinde yasal yollara basvurma hakkini
+sakli tutar.
+
+================================================================================
+10. UYGULANACAK HUKUK VE YETKILI MAHKEME
+================================================================================
+
+Bu Lisans ve bundan dogan tum anlasmazliklar Turkiye Cumhuriyeti yasalarina
+tabidir. Uyusmazliklarin cozumunde Istanbul Mahkemeleri ve Icra Daireleri
+yetkilidir.
+
+================================================================================
+11. AYRILABILIRLIK VE BUTUNLUK
+================================================================================
+
+Bu Lisansin herhangi bir hukmu yargi tarafindan gecersiz veya uygulanamaz
+sayilirsa, geri kalan hukumler tam gucu ile yururlukte kalmaya devam eder.
+Bu Lisans, Yazilim ile ilgili Sahip ve Kullanici arasindaki tum anlasmayi
+olusturur ve onceki tum sozlu/yazili anlasmalarin yerine geçer.
+
+================================================================================
+12. ILETISIM
+================================================================================
+
+Lisans hakkindaki sorular, ticari kullanim talepleri veya ozel anlasmalar icin:
+
+  GitHub: https://github.com/Tumelo00
+  Issue: https://github.com/Tumelo00/AirPlayStreamer/issues
+
+================================================================================
+
+Yazilim'i indirerek, yukleyerek veya kullanarak bu lisansin tum sartlarini
+okudugunuzu, anladiginizi ve kabul ettiginizi beyan etmis olursunuz.
+
+ROHTOPS / Tumer Ustunel - 2026

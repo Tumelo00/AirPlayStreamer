@@ -81,18 +81,25 @@ class Streamer:
 
     def shutdown(self) -> None:
         """Stop everything and shut down the background thread."""
+        # Stop capture first to prevent new data
+        try:
+            self._capture.stop()
+        except Exception:
+            pass
+
         if self._loop and self._loop.is_running():
-            future = asyncio.run_coroutine_threadsafe(self._shutdown_async(), self._loop)
             try:
-                future.result(timeout=10)
+                future = asyncio.run_coroutine_threadsafe(self._shutdown_async(), self._loop)
+                future.result(timeout=5)
             except Exception:
                 pass
-            self._loop.call_soon_threadsafe(self._loop.stop)
+            try:
+                self._loop.call_soon_threadsafe(self._loop.stop)
+            except Exception:
+                pass
 
-        self._capture.stop()
-
-        if self._thread:
-            self._thread.join(timeout=5)
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=3)
 
     async def _shutdown_async(self):
         await self._stop_all_streams()

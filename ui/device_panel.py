@@ -183,14 +183,23 @@ class DevicePanel(ctk.CTkFrame):
         # Remove cards for devices no longer present
         for dev_id in list(self._cards.keys()):
             if dev_id not in current_ids:
-                self._cards[dev_id].pack_forget()
-                self._cards[dev_id].destroy()
+                try:
+                    self._cards[dev_id].pack_forget()
+                    self._cards[dev_id].destroy()
+                except Exception:
+                    pass
                 del self._cards[dev_id]
+                self._selected_ids.discard(dev_id)
 
         # Update or create cards
         for device in devices:
             if device.identifier in self._cards:
-                self._cards[device.identifier].update_state(device)
+                try:
+                    self._cards[device.identifier].update_state(device)
+                except Exception:
+                    # Stale reference - recreate
+                    del self._cards[device.identifier]
+                    continue
             else:
                 _LOGGER.info("Creating card for device: %s (%s)",
                              device.name, device.identifier)
