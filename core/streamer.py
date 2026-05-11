@@ -3,9 +3,14 @@
 import asyncio
 import logging
 import threading
+import traceback
 from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Dict, List, Optional
+
+# AirPlay tuning constants
+MIN_AIRPLAY_LATENCY_SAMPLES = 4410  # ~0.1s at 44100Hz (default is 22050+sr ~1.5s)
+RING_BUFFER_BYTES = 17640           # ~100ms at 44100Hz stereo 16-bit (jitter tolerance)
 
 from pyatv.const import Protocol
 from pyatv.interface import AppleTV, Audio, MediaMetadata, Metadata, PushUpdater, RemoteControl
@@ -51,7 +56,7 @@ class Streamer:
     """
 
     def __init__(self):
-        self._ring_buffer = RingBuffer(capacity_bytes=8820)  # ~50ms ultra-low latency
+        self._ring_buffer = RingBuffer(capacity_bytes=RING_BUFFER_BYTES)
         self._capture = AudioCapture(self._ring_buffer)
         self._device_manager = DeviceManager()
 
@@ -196,11 +201,14 @@ class Streamer:
             self._error_message = ""
 
         try:
-            # Connect to all selected devices
+            # Connect to all selected devices in parallel
+            connect_tasks = []
             for device_id in device_ids:
                 device = self._device_manager.get_device(device_id)
                 if device and device.state != DeviceState.CONNECTED:
-                    await self._device_manager.connect(device_id)
+                    connect_tasks.append(self._device_manager.connect(device_id))
+            if connect_tasks:
+                await asyncio.gather(*connect_tasks, return_exceptions=True)
 
             connected = self._device_manager.get_connected_devices()
             if not connected:
@@ -215,6 +223,7 @@ class Streamer:
                 task = asyncio.ensure_future(
                     self._stream_to_device(device)
                 )
+                task.add_done_callback(self._on_stream_task_done)
                 self._stream_tasks[device.identifier] = task
 
             with self._state_lock:
@@ -262,10 +271,9 @@ class Streamer:
                 client.listener = raop_stream.listener
                 await client.initialize(raop_stream.core.service.properties)
 
-                # Reduce AirPlay latency buffer for lower delay
-                # Default is 22050 + 44100 = 66150 samples (~1.5s)
-                # We reduce to ~0.5s for near-real-time streaming
-                context.latency = 4410  # ~0.1s ultra-low latency
+                # Reduce AirPlay latency buffer for near-real-time streaming
+                # (default ~1.5s, we use ~0.1s)
+                context.latency = MIN_AIRPLAY_LATENCY_SAMPLES
 
                 # Create our live audio source (unique reader per device)
                 source = LiveAudioSource(
@@ -295,10 +303,12 @@ class Streamer:
         except asyncio.CancelledError:
             _LOGGER.info("Stream to %s cancelled", device.name)
         except Exception as e:
-            import traceback
             _LOGGER.error("Stream error for %s: %s\n%s", device.name, e,
                           traceback.format_exc())
             device.error_message = str(e)
+            with self._state_lock:
+                if not self._error_message:
+                    self._error_message = f"{device.name}: {e}"
         finally:
             if source:
                 source.stop()
@@ -333,9 +343,22 @@ class Streamer:
         self._active_sources.clear()
 
     async def _do_set_volume(self, device_id: str, volume: float):
+        # Clamp to valid range (0-100)
+        volume = max(0.0, min(100.0, float(volume)))
         device = self._device_manager.get_device(device_id)
         if device and device.connection:
             try:
                 await device.connection.audio.set_volume(volume)
             except Exception as e:
                 _LOGGER.error("Volume change failed for %s: %s", device.name, e)
+
+    def _on_stream_task_done(self, task: asyncio.Task) -> None:
+        """Surface unexpected task failures to UI state."""
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc and not isinstance(exc, asyncio.CancelledError):
+            _LOGGER.error("Stream task failed: %s", exc)
+            with self._state_lock:
+                if not self._error_message:
+                    self._error_message = f"Yayin hatasi: {exc}"

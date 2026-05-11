@@ -27,6 +27,7 @@ class LiveAudioSource(AudioSource):
         self._stopped = False
         self._reader_id = reader_id or str(uuid.uuid4())[:8]
         self._buffer.register_reader(self._reader_id)
+        self._is_little_endian = (sys.byteorder == "little")
 
     async def readframes(self, nframes: int) -> bytes:
         if self._stopped:
@@ -35,25 +36,24 @@ class LiveAudioSource(AudioSource):
         total_bytes = nframes * self._channels * self._sample_size
         data = self._buffer.read(total_bytes, reader_id=self._reader_id)
 
-        output = array.array("h", data)
-        if sys.byteorder == "little":
-            output.byteswap()
+        if not self._is_little_endian:
+            return data
 
+        # Byteswap for AirPlay (in-place via array module)
+        output = array.array("h", data)
+        output.byteswap()
         return output.tobytes()
 
     async def get_metadata(self) -> MediaMetadata:
-        return MediaMetadata(
-            title="Sistem Sesi",
-            artist="AirPlay Streamer",
-        )
+        return MediaMetadata(title="Sistem Sesi", artist="AirPlay Streamer")
 
     async def close(self) -> None:
         self._unregister_once()
 
-    def stop(self):
+    def stop(self) -> None:
         self._unregister_once()
 
-    def _unregister_once(self):
+    def _unregister_once(self) -> None:
         if self._stopped:
             return
         self._stopped = True

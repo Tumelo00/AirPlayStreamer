@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional
@@ -46,6 +47,7 @@ class DeviceManager:
 
     def __init__(self):
         self._devices: Dict[str, AirPlayDevice] = {}
+        self._devices_lock = threading.Lock()
         self._storage: Optional[FileStorage] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._ensure_credentials_dir()
@@ -71,36 +73,34 @@ class DeviceManager:
             storage=storage,
         )
 
-        for config in configs:
-            # Only consider devices that support AirPlay
-            if not config.get_service(Protocol.AirPlay):
-                continue
+        with self._devices_lock:
+            for config in configs:
+                if not config.get_service(Protocol.AirPlay):
+                    continue
 
-            identifier = config.identifier
-            if identifier in self._devices:
-                # Update existing device info
-                dev = self._devices[identifier]
-                dev.name = config.name
-                dev.address = str(config.address)
-                dev.config = config
-                if dev.state == DeviceState.DISCONNECTED:
-                    dev.state = DeviceState.DISCOVERED
-            else:
-                self._devices[identifier] = AirPlayDevice(
-                    identifier=identifier,
-                    name=config.name,
-                    address=str(config.address),
-                    config=config,
-                )
+                identifier = config.identifier
+                if identifier in self._devices:
+                    dev = self._devices[identifier]
+                    dev.name = config.name
+                    dev.address = str(config.address)
+                    dev.config = config
+                    if dev.state == DeviceState.DISCONNECTED:
+                        dev.state = DeviceState.DISCOVERED
+                else:
+                    self._devices[identifier] = AirPlayDevice(
+                        identifier=identifier,
+                        name=config.name,
+                        address=str(config.address),
+                        config=config,
+                    )
 
-            # Check if we have stored credentials (= already paired)
-            if config.get_service(Protocol.AirPlay) and \
-               config.get_service(Protocol.AirPlay).credentials:
-                if self._devices[identifier].state == DeviceState.DISCOVERED:
+                svc = config.get_service(Protocol.AirPlay)
+                if svc and svc.credentials and \
+                        self._devices[identifier].state == DeviceState.DISCOVERED:
                     self._devices[identifier].state = DeviceState.PAIRED
 
-        _LOGGER.info("Found %d AirPlay devices", len(self._devices))
-        return list(self._devices.values())
+            _LOGGER.info("Found %d AirPlay devices", len(self._devices))
+            return list(self._devices.values())
 
     async def pair(self, device_id: str) -> str:
         """Start pairing with a device. Returns a pairing handler to complete with PIN."""
@@ -192,18 +192,24 @@ class DeviceManager:
 
     async def disconnect_all(self) -> None:
         """Disconnect from all devices."""
-        for device_id in list(self._devices.keys()):
+        with self._devices_lock:
+            ids = list(self._devices.keys())
+        for device_id in ids:
             await self.disconnect(device_id)
 
     def get_device(self, device_id: str) -> Optional[AirPlayDevice]:
-        return self._devices.get(device_id)
+        with self._devices_lock:
+            return self._devices.get(device_id)
 
     def get_devices(self) -> List[AirPlayDevice]:
-        return list(self._devices.values())
+        """Thread-safe snapshot of current devices."""
+        with self._devices_lock:
+            return list(self._devices.values())
 
     def get_connected_devices(self) -> List[AirPlayDevice]:
-        return [d for d in self._devices.values()
-                if d.state in (DeviceState.CONNECTED, DeviceState.STREAMING)]
+        with self._devices_lock:
+            return [d for d in self._devices.values()
+                    if d.state in (DeviceState.CONNECTED, DeviceState.STREAMING)]
 
 
 class DeviceListener:

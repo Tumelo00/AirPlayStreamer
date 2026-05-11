@@ -1,7 +1,8 @@
-"""Thread-safe ring buffer for bridging audio capture and AirPlay streaming.
+"""Thread-safe broadcast ring buffer for live audio streaming.
 
-Supports multiple readers: each reader gets its own cursor so both HomePods
-receive the same audio data independently.
+One writer (audio capture callback), multiple readers (per-device streamers).
+Each reader has an independent cursor. When buffer overruns, lagging readers
+are advanced to the oldest still-valid byte.
 """
 
 import threading
@@ -11,16 +12,15 @@ import numpy as np
 
 
 class RingBuffer:
-    """Broadcast ring buffer: one writer, multiple independent readers."""
+    """Broadcast ring buffer with per-reader cursors."""
 
     def __init__(self, capacity_bytes: int = 176400):
         self._capacity = capacity_bytes
         self._buffer = np.zeros(capacity_bytes, dtype=np.uint8)
         self._write_pos = 0
-        self._total_written = 0  # monotonically increasing byte counter
+        self._total_written = 0
         self._lock = threading.Lock()
         self._peak_level = 0.0
-        # Each reader has its own "total_read" counter
         self._readers: Dict[str, int] = {}
 
     @property
@@ -35,17 +35,14 @@ class RingBuffer:
             return level
 
     def register_reader(self, reader_id: str) -> None:
-        """Register a new reader. It starts reading from the current position."""
         with self._lock:
             self._readers[reader_id] = self._total_written
 
     def unregister_reader(self, reader_id: str) -> None:
-        """Remove a reader."""
         with self._lock:
             self._readers.pop(reader_id, None)
 
     def write(self, data: bytes) -> int:
-        """Write audio data. All registered readers can read it independently."""
         n = len(data)
         if n == 0:
             return 0
@@ -74,19 +71,21 @@ class RingBuffer:
             self._write_pos = (self._write_pos + n) % self._capacity
             self._total_written += n
 
-            # If any reader fell behind more than capacity, advance it
+            # Advance lagging readers (snapshot keys to allow concurrent unregister)
             oldest_valid = self._total_written - self._capacity
-            for rid in self._readers:
-                if self._readers[rid] < oldest_valid:
+            for rid in list(self._readers.keys()):
+                pos = self._readers.get(rid)
+                if pos is not None and pos < oldest_valid:
                     self._readers[rid] = oldest_valid
 
             return n
 
-    def read(self, n: int, reader_id: str = "default") -> bytes:
-        """Read up to n bytes for a specific reader. Returns silence if not enough data."""
+    def read(self, n: int, reader_id: str) -> bytes:
+        """Read up to n bytes for reader_id. Returns silence if not registered or no data."""
         with self._lock:
             if reader_id not in self._readers:
-                self._readers[reader_id] = self._total_written
+                # Reader not registered: return silence, don't auto-create
+                return bytes(n)
 
             reader_pos = self._readers[reader_id]
             available_bytes = self._total_written - reader_pos
@@ -95,8 +94,6 @@ class RingBuffer:
                 return bytes(n)
 
             to_read = min(n, available_bytes)
-
-            # Calculate where in the circular buffer this reader's data starts
             buf_start = reader_pos % self._capacity
 
             result = bytearray(n)
@@ -108,13 +105,12 @@ class RingBuffer:
                 result[first_chunk:first_chunk + remainder] = self._buffer[:remainder].tobytes()
 
             self._readers[reader_id] = reader_pos + to_read
-
             return bytes(result)
 
-    def clear(self):
+    def clear(self) -> None:
         with self._lock:
             self._write_pos = 0
             self._total_written = 0
             self._peak_level = 0.0
-            for rid in self._readers:
+            for rid in list(self._readers.keys()):
                 self._readers[rid] = 0
