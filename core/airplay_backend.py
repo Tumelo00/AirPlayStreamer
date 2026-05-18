@@ -37,6 +37,7 @@ class RaopSession:
         self._context = None
         self._takeover_release = None
         self._acquired = False
+        self._requested_latency = None
 
     @staticmethod
     def find_raop_stream(atv: AppleTV):
@@ -79,23 +80,29 @@ class RaopSession:
             await self.close()
             raise AirPlayError(f"RAOP setup hatasi: {e}") from e
 
-    @staticmethod
-    def _apply_latency(context, latency_samples: int) -> None:
+    def _apply_latency(self, context, latency_samples: int) -> None:
         """Set context.latency and keep it after StreamContext.reset().
 
         pyatv's send_audio() calls context.reset() which restores the
         default latency. We shadow reset() on the instance so our value
         survives.
         """
+        self._requested_latency = latency_samples
         context.latency = latency_samples
         original_reset = context.reset
 
         def reset_keeping_latency():
+            before = context.latency
             original_reset()
+            after_reset = context.latency
             context.latency = latency_samples
+            _LOGGER.info("latency: reset patch [%s] before=%s after_reset=%s "
+                         "-> kept=%d", self._device_name, before, after_reset,
+                         latency_samples)
 
         context.reset = reset_keeping_latency
-        _LOGGER.info("AirPlay latency set to %d samples", latency_samples)
+        _LOGGER.info("latency: requested=%d samples for %s",
+                     latency_samples, self._device_name)
 
     @property
     def sample_rate(self) -> int:
@@ -117,6 +124,10 @@ class RaopSession:
         """
         if self._client is None:
             raise AirPlayError("Session not opened")
+        if self._context is not None:
+            _LOGGER.info("latency: before send_audio [%s] context.latency=%s "
+                         "(requested=%s)", self._device_name,
+                         self._context.latency, self._requested_latency)
         metadata = MediaMetadata(title=title, artist=artist)
         await self._client.send_audio(source, metadata)
 
