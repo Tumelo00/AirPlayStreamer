@@ -12,6 +12,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.config import Config
+from core.network import patch_pyatv_connection
 from core.streamer import Streamer
 from ui.app import AirPlayStreamerApp
 
@@ -38,6 +39,11 @@ def main():
     setup_logging()
     logger = logging.getLogger(__name__)
     logger.info("AirPlay Streamer starting...")
+
+    # Force AirPlay connections onto the physical LAN interface.
+    # Without this, an active VPN (Tailscale etc.) makes pyatv report a
+    # non-LAN source IP and HomePods reject the session (RTSP 400).
+    patch_pyatv_connection()
 
     config = Config()
     streamer = Streamer()
