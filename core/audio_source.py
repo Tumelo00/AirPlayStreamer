@@ -17,6 +17,10 @@ class LiveAudioSource(AudioSource):
     the same audio data independently from the shared ring buffer.
     """
 
+    # Jitter buffer: start reading this far behind the write head so brief
+    # capture/network hiccups don't cause underruns (crackling).
+    CUSHION_MS = 120
+
     def __init__(self, ring_buffer: RingBuffer, sample_rate: int = 44100,
                  channels: int = 2, sample_size: int = 2,
                  reader_id: str = None):
@@ -26,7 +30,8 @@ class LiveAudioSource(AudioSource):
         self._sample_size = sample_size
         self._stopped = False
         self._reader_id = reader_id or str(uuid.uuid4())[:8]
-        self._buffer.register_reader(self._reader_id)
+        cushion = int(sample_rate * channels * sample_size * self.CUSHION_MS / 1000)
+        self._buffer.register_reader(self._reader_id, cushion_bytes=cushion)
         self._is_little_endian = (sys.byteorder == "little")
 
     async def readframes(self, nframes: int) -> bytes:

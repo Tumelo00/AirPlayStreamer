@@ -10,7 +10,7 @@ from typing import Callable, Dict, List, Optional
 
 # AirPlay tuning constants
 MIN_AIRPLAY_LATENCY_SAMPLES = 4410  # ~0.1s at 44100Hz (default is 22050+sr ~1.5s)
-RING_BUFFER_BYTES = 17640           # ~100ms at 44100Hz stereo 16-bit (jitter tolerance)
+RING_BUFFER_BYTES = 88200           # ~500ms at 44100Hz stereo 16-bit (jitter headroom)
 
 # Reconnect / recovery
 RECONNECT_BACKOFF_START = 1.0       # seconds
@@ -258,9 +258,11 @@ class Streamer:
             if not connected:
                 raise RuntimeError("Hicbir cihaza baglanamadi")
 
-            # Start audio capture
+            # Start audio capture and let the buffer build a jitter cushion
+            # before readers attach (prevents initial underruns/crackle)
             self._ring_buffer.clear()
             self._capture.start(audio_device)
+            await asyncio.sleep(0.25)
 
             # Start a supervised stream task per device (handles reconnect)
             self._stop_requested = False

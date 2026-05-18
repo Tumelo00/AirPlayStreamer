@@ -34,9 +34,15 @@ class RingBuffer:
             self._peak_level *= 0.85
             return level
 
-    def register_reader(self, reader_id: str) -> None:
+    def register_reader(self, reader_id: str, cushion_bytes: int = 0) -> None:
+        """Register a reader. cushion_bytes makes it start that many bytes
+        behind the write head, giving a jitter buffer that prevents
+        underruns (which cause crackling). Clamped to available data.
+        """
         with self._lock:
-            self._readers[reader_id] = self._total_written
+            start = self._total_written - max(0, cushion_bytes)
+            oldest_valid = max(0, self._total_written - self._capacity)
+            self._readers[reader_id] = max(oldest_valid, start)
 
     def unregister_reader(self, reader_id: str) -> None:
         with self._lock:
