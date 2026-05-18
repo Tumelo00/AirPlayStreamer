@@ -32,7 +32,7 @@ DEFAULTS = {
     "window_x": None,
     "window_y": None,
     "window_width": 520,
-    "window_height": 700,
+    "window_height": 800,
     "selected_audio_device_index": None,
     "last_device_ids": [],
     "volume_levels": {},
@@ -40,6 +40,7 @@ DEFAULTS = {
     "start_minimized": False,
     "auto_connect": False,
     "latency_profile": DEFAULT_LATENCY_PROFILE,
+    "device_delays": {},  # device_id -> calibration delay ms
 }
 
 

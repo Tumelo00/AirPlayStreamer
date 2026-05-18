@@ -105,11 +105,14 @@ class AirPlayStreamerApp(ctk.CTk):
         ).grid(row=1, column=0, sticky="w", columnspan=2)
 
         # Device panel
+        self._device_delays = dict(self._config.get("device_delays", {}) or {})
         self._device_panel = DevicePanel(
             self,
             on_scan=self._on_scan,
             on_pair=self._on_pair,
             on_selection_change=self._on_device_selection_change,
+            on_delay_change=self._on_device_delay_change,
+            device_delays=self._device_delays,
         )
         self._device_panel.pack(fill="both", expand=True, padx=15, pady=(10, 5))
 
@@ -191,10 +194,20 @@ class AirPlayStreamerApp(ctk.CTk):
         profile = self._config.get("latency_profile", "balanced")
         self._streamer.set_latency_samples(latency_profile_to_samples(profile))
 
+        # Apply per-device calibration delays
+        self._streamer.set_device_delays(self._device_delays)
+
         self._streamer.request_start_streaming(selected, audio_device)
 
     def _on_stop(self):
         self._streamer.request_stop_streaming()
+
+    def _on_device_delay_change(self, device_id: str, delay_ms: int):
+        # Persist and apply (live if streaming)
+        self._device_delays[device_id] = delay_ms
+        self._config.set("device_delays", self._device_delays)
+        self._config.save()
+        self._streamer.request_set_device_delay(device_id, delay_ms)
 
     def _on_device_selection_change(self, device_id: str, selected: bool):
         # While streaming, add/remove devices live

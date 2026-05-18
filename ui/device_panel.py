@@ -14,13 +14,16 @@ class DeviceCard(ctk.CTkFrame):
     """A single device entry in the device list."""
 
     def __init__(self, master, device: AirPlayDevice,
-                 on_pair: Callable, on_select: Callable, **kwargs):
+                 on_pair: Callable, on_select: Callable,
+                 on_delay_change: Callable = None, delay_ms: int = 0,
+                 **kwargs):
         super().__init__(master, fg_color=BG_INPUT, corner_radius=8,
-                         height=65, **kwargs)
+                         height=100, **kwargs)
         self.pack_propagate(False)  # Force fixed height
         self._device = device
         self._on_pair_cb = on_pair
         self._on_select_cb = on_select
+        self._on_delay_cb = on_delay_change
 
         # Internal layout frame
         inner = ctk.CTkFrame(self, fg_color="transparent")
@@ -69,7 +72,36 @@ class DeviceCard(ctk.CTkFrame):
         )
         self._dot.pack(side="top", pady=(5, 0))
 
-        # No pair button - HomePod connects directly without pairing
+        # Per-device delay calibration row
+        delay_row = ctk.CTkFrame(inner, fg_color="transparent")
+        delay_row.grid(row=2, column=0, columnspan=3, sticky="ew", padx=2)
+        delay_row.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            delay_row, text="Gecikme", width=58, anchor="w",
+            font=ctk.CTkFont(size=10), text_color=TEXT_MUTED,
+        ).grid(row=0, column=0, padx=(3, 4))
+
+        self._delay_var = ctk.DoubleVar(value=delay_ms)
+        self._delay_slider = ctk.CTkSlider(
+            delay_row, from_=0, to=500, variable=self._delay_var,
+            button_color=ACCENT, button_hover_color=ACCENT_HOVER,
+            progress_color=ACCENT, fg_color=BG_CARD, height=14,
+            command=self._on_delay_changed,
+        )
+        self._delay_slider.grid(row=0, column=1, sticky="ew", padx=(0, 6))
+
+        self._delay_label = ctk.CTkLabel(
+            delay_row, text=f"{int(delay_ms)}ms", width=46,
+            font=ctk.CTkFont(size=10), text_color=TEXT_SECONDARY,
+        )
+        self._delay_label.grid(row=0, column=2, padx=(0, 3))
+
+    def _on_delay_changed(self, value):
+        ms = int(value)
+        self._delay_label.configure(text=f"{ms}ms")
+        if self._on_delay_cb:
+            self._on_delay_cb(self._device.identifier, ms)
 
     def _on_check_changed(self):
         self._on_select_cb(self._device.identifier, self._checkbox_var.get())
@@ -101,11 +133,15 @@ class DevicePanel(ctk.CTkFrame):
     """Panel showing discovered AirPlay devices with controls."""
 
     def __init__(self, master, on_scan: Callable, on_pair: Callable,
-                 on_selection_change: Callable = None, **kwargs):
+                 on_selection_change: Callable = None,
+                 on_delay_change: Callable = None,
+                 device_delays: dict = None, **kwargs):
         super().__init__(master, fg_color=BG_CARD, corner_radius=12, **kwargs)
         self._on_scan = on_scan
         self._on_pair = on_pair
         self._on_selection_change = on_selection_change
+        self._on_delay_change = on_delay_change
+        self._device_delays = device_delays if device_delays is not None else {}
         self._cards: Dict[str, DeviceCard] = {}
         self._selected_ids: set = set()
         self._last_device_count = -1
@@ -215,6 +251,8 @@ class DevicePanel(ctk.CTkFrame):
                     self._list_frame, device,
                     on_pair=self._on_pair,
                     on_select=self._on_device_select,
+                    on_delay_change=self._on_delay_change,
+                    delay_ms=self._device_delays.get(device.identifier, 0),
                 )
                 card.pack(fill="x", pady=4, padx=5)
                 self._cards[device.identifier] = card
