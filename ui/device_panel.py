@@ -38,19 +38,21 @@ class DeviceCard(ctk.CTkFrame):
         )
         self._checkbox.grid(row=0, column=0, padx=(5, 8), pady=5, rowspan=2, sticky="w")
 
-        # Device name
+        # Device name (stereo pairs get a speaker-pair prefix)
+        name_prefix = "\U0001F50A\U0001F50A  " if device.is_group else ""
         self._name_label = ctk.CTkLabel(
-            inner, text=device.name,
+            inner, text=name_prefix + device.name,
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=TEXT_PRIMARY, anchor="w",
         )
         self._name_label.grid(row=0, column=1, padx=2, pady=(5, 0), sticky="w")
 
-        # Device address + state
+        # Device address + state (groups show "Stereo Cift")
         state_text = S.get(device.state.value, device.state.value)
         state_color = STATUS_COLORS.get(device.state.value, TEXT_MUTED)
+        kind = "Stereo Cift (2 HomePod)" if device.is_group else device.address
         self._status_label = ctk.CTkLabel(
-            inner, text=f"{device.address}  |  {state_text}",
+            inner, text=f"{kind}  |  {state_text}",
             font=ctk.CTkFont(size=11),
             text_color=state_color, anchor="w",
         )
@@ -78,9 +80,11 @@ class DeviceCard(ctk.CTkFrame):
         state_text = S.get(device.state.value, device.state.value)
         state_color = STATUS_COLORS.get(device.state.value, TEXT_MUTED)
 
-        self._name_label.configure(text=device.name)
+        name_prefix = "\U0001F50A\U0001F50A  " if device.is_group else ""
+        kind = "Stereo Cift (2 HomePod)" if device.is_group else device.address
+        self._name_label.configure(text=name_prefix + device.name)
         self._status_label.configure(
-            text=f"{device.address}  |  {state_text}",
+            text=f"{kind}  |  {state_text}",
             text_color=state_color,
         )
         self._dot.configure(text_color=state_color)

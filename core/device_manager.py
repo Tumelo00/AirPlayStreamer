@@ -40,6 +40,7 @@ class AirPlayDevice:
     state: DeviceState = DeviceState.DISCOVERED
     connection: Optional[AppleTV] = field(default=None, repr=False)
     error_message: str = ""
+    is_group: bool = False  # True = stereo pair / speaker group
 
 
 class DeviceManager:
@@ -71,7 +72,7 @@ class DeviceManager:
         to followers in perfect sync.
 
         Returns (visible, followers):
-          visible   - list of (config, display_name) to show
+          visible   - list of (config, display_name, is_group) to show
           followers - set of identifiers that are group followers and
                       must be hidden / purged from the device list
         """
@@ -79,24 +80,34 @@ class DeviceManager:
         visible = []
         followers = set()
 
+        # Count members per gid so a "group of one" is not flagged as a pair
+        gid_counts = {}
+        for c in airplay:
+            props = c.get_service(Protocol.AirPlay).properties or {}
+            gid = props.get("gid")
+            if gid:
+                gid_counts[gid] = gid_counts.get(gid, 0) + 1
+
         for c in airplay:
             props = c.get_service(Protocol.AirPlay).properties or {}
             gid = props.get("gid")
             igl = props.get("igl")
             gpn = props.get("gpn")
+            in_pair = bool(gid) and gid_counts.get(gid, 0) > 1
 
             # A grouped follower: never shown, streaming goes via leader
-            if gid and igl == "0":
+            if in_pair and igl == "0":
                 followers.add(c.identifier)
                 continue
 
-            # Grouped leader: show under the group name
-            if gid and igl == "1" and gpn:
-                visible.append((c, gpn))
-                _LOGGER.info("Group leader '%s' (gid=%s)", gpn, gid[:16])
+            # Grouped leader: show under the group name, flagged as group
+            if in_pair and igl == "1":
+                visible.append((c, gpn or c.name, True))
+                _LOGGER.info("Group leader '%s' (gid=%s)",
+                             gpn or c.name, gid[:16])
             else:
                 # Standalone device (no group, or group of one)
-                visible.append((c, c.name))
+                visible.append((c, c.name, False))
 
         return visible, followers
 
@@ -118,13 +129,14 @@ class DeviceManager:
             for fid in followers:
                 self._devices.pop(fid, None)
 
-            for config, display_name in grouped:
+            for config, display_name, is_group in grouped:
                 identifier = config.identifier
                 if identifier in self._devices:
                     dev = self._devices[identifier]
                     dev.name = display_name
                     dev.address = str(config.address)
                     dev.config = config
+                    dev.is_group = is_group
                     if dev.state == DeviceState.DISCONNECTED:
                         dev.state = DeviceState.DISCOVERED
                 else:
@@ -133,6 +145,7 @@ class DeviceManager:
                         name=display_name,
                         address=str(config.address),
                         config=config,
+                        is_group=is_group,
                     )
 
                 svc = config.get_service(Protocol.AirPlay)

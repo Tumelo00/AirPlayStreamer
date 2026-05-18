@@ -20,8 +20,7 @@ class Launcher
     const string APP_FOLDER_NAME = "AirPlayStreamer";
     const string MAIN_EXE = "AirPlayStreamer-Core.exe";
     const string PAYLOAD_RESOURCE = "Launcher.app.zip";
-    const string VERSION_FILE = "version.txt";
-    const string CURRENT_VERSION = "1.0.0";
+    const string VERSION_FILE = "payload.hash";
 
     [STAThread]
     static int Main()
@@ -35,10 +34,19 @@ class Launcher
             string mainExePath = Path.Combine(appDataDir, MAIN_EXE);
             string versionPath = Path.Combine(appDataDir, VERSION_FILE);
 
-            // 2. Check if extraction needed (first run or version mismatch)
+            // 2. Re-extract whenever the embedded payload changed.
+            // Compare a hash of the bundled zip vs the last extracted hash,
+            // so every new build is deployed even with the same version.
+            string payloadHash = ComputePayloadHash();
+            string cachedHash = "";
+            if (File.Exists(versionPath))
+            {
+                try { cachedHash = File.ReadAllText(versionPath).Trim(); }
+                catch { }
+            }
             bool needsExtraction = !File.Exists(mainExePath) ||
-                                   !File.Exists(versionPath) ||
-                                   File.ReadAllText(versionPath).Trim() != CURRENT_VERSION;
+                                   payloadHash == "" ||
+                                   cachedHash != payloadHash;
 
             if (needsExtraction)
             {
@@ -50,7 +58,8 @@ class Launcher
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return 1;
                 }
-                File.WriteAllText(versionPath, CURRENT_VERSION);
+                try { File.WriteAllText(versionPath, payloadHash); }
+                catch { }
             }
 
             if (!File.Exists(mainExePath))
@@ -100,6 +109,31 @@ class Launcher
             MessageBox.Show("Hata: " + ex.Message + "\n\n" + ex.StackTrace,
                 "AirPlay Streamer", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
+        }
+    }
+
+    static string ComputePayloadHash()
+    {
+        try
+        {
+            Assembly asm = Assembly.GetExecutingAssembly();
+            string resourceName = null;
+            foreach (string n in asm.GetManifestResourceNames())
+            {
+                if (n.EndsWith("app.zip")) { resourceName = n; break; }
+            }
+            if (resourceName == null) return "";
+
+            using (Stream rs = asm.GetManifestResourceStream(resourceName))
+            using (var md5 = System.Security.Cryptography.MD5.Create())
+            {
+                byte[] hash = md5.ComputeHash(rs);
+                return BitConverter.ToString(hash).Replace("-", "");
+            }
+        }
+        catch
+        {
+            return "";
         }
     }
 
