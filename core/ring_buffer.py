@@ -48,6 +48,19 @@ class RingBuffer:
         with self._lock:
             self._readers.pop(reader_id, None)
 
+    def set_reader_cushion(self, reader_id: str, cushion_bytes: int) -> None:
+        """Reposition a live reader to read `cushion_bytes` behind the write
+        head. Used for per-device delay calibration. Causes a brief audio
+        jump at the moment of change (acceptable for a tuning slider).
+        """
+        with self._lock:
+            if reader_id not in self._readers:
+                return
+            start = self._total_written - max(0, cushion_bytes)
+            oldest_valid = max(0, self._total_written - self._capacity)
+            self._readers[reader_id] = max(oldest_valid,
+                                           min(self._total_written, start))
+
     def write(self, data: bytes) -> int:
         n = len(data)
         if n == 0:

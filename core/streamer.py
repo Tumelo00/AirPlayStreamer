@@ -10,7 +10,8 @@ from typing import Callable, Dict, List, Optional
 
 # AirPlay tuning constants
 MIN_AIRPLAY_LATENCY_SAMPLES = 4410  # ~0.1s at 44100Hz (default is 22050+sr ~1.5s)
-RING_BUFFER_BYTES = 88200           # ~500ms at 44100Hz stereo 16-bit (jitter headroom)
+RING_BUFFER_BYTES = 176400          # ~1s at 44100Hz stereo 16-bit (jitter + per-device delay)
+MAX_DEVICE_DELAY_MS = 500           # per-device calibration delay cap
 
 # Reconnect / recovery
 RECONNECT_BACKOFF_START = 1.0       # seconds
@@ -75,6 +76,7 @@ class Streamer:
         self._reconnect_attempts: Dict[str, int] = {}
         self._stop_requested = False
         self._latency_samples = MIN_AIRPLAY_LATENCY_SAMPLES
+        self._device_delays: Dict[str, int] = {}  # device_id -> ms
 
         self._state_lock = threading.Lock()
 
@@ -141,6 +143,25 @@ class Streamer:
     def set_latency_samples(self, samples: int) -> None:
         """Set the AirPlay latency buffer size in samples (thread-safe)."""
         self._latency_samples = max(2205, int(samples))
+
+    def set_device_delays(self, delays: Dict[str, int]) -> None:
+        """Set per-device calibration delays in ms (applied on next start)."""
+        self._device_delays = {k: max(0, min(MAX_DEVICE_DELAY_MS, int(v)))
+                               for k, v in delays.items()}
+
+    def request_set_device_delay(self, device_id: str, delay_ms: int) -> None:
+        """Set one device's calibration delay; applies live if streaming."""
+        delay_ms = max(0, min(MAX_DEVICE_DELAY_MS, int(delay_ms)))
+        self._device_delays[device_id] = delay_ms
+        if self._loop:
+            asyncio.run_coroutine_threadsafe(
+                self._do_set_device_delay(device_id, delay_ms), self._loop)
+
+    async def _do_set_device_delay(self, device_id: str, delay_ms: int):
+        source = self._active_sources.get(device_id)
+        if source:
+            source.set_delay_ms(delay_ms)
+            _LOGGER.info("Device delay %s -> %dms", device_id, delay_ms)
 
     def request_start_streaming(self, device_ids: List[str],
                                 audio_device: Optional[AudioDevice] = None) -> None:
@@ -366,6 +387,7 @@ class Streamer:
                 channels=session.channels,
                 sample_size=session.sample_size,
                 reader_id=device.identifier,
+                delay_ms=self._device_delays.get(device.identifier, 0),
             )
             self._active_sources[device.identifier] = source
 
