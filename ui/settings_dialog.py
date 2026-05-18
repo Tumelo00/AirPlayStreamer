@@ -4,7 +4,7 @@ import customtkinter as ctk
 from typing import Callable, List, Optional
 
 from core.audio_capture import AudioDevice
-from core.config import Config
+from core.config import Config, LATENCY_PROFILES
 from ui.theme import *
 
 
@@ -19,7 +19,7 @@ class SettingsDialog(ctk.CTkToplevel):
         self._on_save = on_save
 
         self.title(S["settings"])
-        self.geometry("400x320")
+        self.geometry("400x420")
         self.resizable(False, False)
         self.configure(fg_color=BG_DARK)
         self.transient(master)
@@ -65,6 +65,36 @@ class SettingsDialog(ctk.CTkToplevel):
         self._device_dropdown.pack(padx=15, pady=(0, 12))
         self._audio_devices = audio_devices
 
+        # Latency profile selection
+        lat_frame = ctk.CTkFrame(self, fg_color=BG_CARD, corner_radius=10)
+        lat_frame.pack(fill="x", padx=20, pady=(0, 10))
+
+        ctk.CTkLabel(
+            lat_frame, text="Gecikme Profili",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=TEXT_PRIMARY,
+        ).pack(anchor="w", padx=15, pady=(12, 5))
+
+        self._lat_keys = list(LATENCY_PROFILES.keys())
+        lat_labels = [LATENCY_PROFILES[k][0] for k in self._lat_keys]
+        current_key = config.get("latency_profile", "balanced")
+        current_label = LATENCY_PROFILES.get(
+            current_key, LATENCY_PROFILES["balanced"])[0]
+        self._lat_var = ctk.StringVar(value=current_label)
+
+        self._lat_dropdown = ctk.CTkComboBox(
+            lat_frame, values=lat_labels, variable=self._lat_var,
+            fg_color=BG_INPUT, border_color=BORDER,
+            button_color=ACCENT, button_hover_color=ACCENT_HOVER,
+            dropdown_fg_color=BG_INPUT, text_color=TEXT_PRIMARY,
+            dropdown_text_color=TEXT_PRIMARY, width=300,
+        )
+        self._lat_dropdown.pack(padx=15, pady=(0, 4))
+        ctk.CTkLabel(
+            lat_frame, text="Dusuk gecikme daha az tampon, dalgalanmada kesinti riski",
+            font=ctk.CTkFont(size=10), text_color=TEXT_MUTED,
+        ).pack(anchor="w", padx=15, pady=(0, 12))
+
         # Options
         options_frame = ctk.CTkFrame(self, fg_color=BG_CARD, corner_radius=10)
         options_frame.pack(fill="x", padx=20, pady=(0, 10))
@@ -106,6 +136,13 @@ class SettingsDialog(ctk.CTkToplevel):
                 if d.name == selected_name:
                     self._config.set("selected_audio_device_index", d.index)
                     break
+
+        # Latency profile: map selected label back to its key
+        sel_label = self._lat_var.get()
+        for key in self._lat_keys:
+            if LATENCY_PROFILES[key][0] == sel_label:
+                self._config.set("latency_profile", key)
+                break
 
         self._config.set("minimize_to_tray", self._tray_var.get())
         self._config.set("auto_connect", self._auto_var.get())

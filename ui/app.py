@@ -172,6 +172,11 @@ class AirPlayStreamerApp(ctk.CTk):
                     audio_device = dev
                     break
 
+        # Apply latency profile from config
+        from core.config import latency_profile_to_samples
+        profile = self._config.get("latency_profile", "balanced")
+        self._streamer.set_latency_samples(latency_profile_to_samples(profile))
+
         self._streamer.request_start_streaming(selected, audio_device)
 
     def _on_stop(self):

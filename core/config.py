@@ -10,6 +10,24 @@ _LOGGER = logging.getLogger(__name__)
 CONFIG_DIR = os.path.join(os.environ.get("APPDATA", ""), "AirPlayStreamer")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
+# Latency profiles: name -> milliseconds. Converted to samples at 44100Hz.
+# Lower = less delay but less jitter tolerance.
+LATENCY_PROFILES = {
+    "ultra_low": ("Ultra Dusuk (~100ms)", 100),
+    "low": ("Dusuk (~250ms)", 250),
+    "balanced": ("Dengeli (~500ms)", 500),
+    "stable": ("Kararli (~1500ms)", 1500),
+}
+DEFAULT_LATENCY_PROFILE = "balanced"
+
+
+def latency_profile_to_samples(profile_key: str, sample_rate: int = 44100) -> int:
+    """Convert a latency profile key to a sample count."""
+    entry = LATENCY_PROFILES.get(profile_key)
+    ms = entry[1] if entry else LATENCY_PROFILES[DEFAULT_LATENCY_PROFILE][1]
+    return int(sample_rate * ms / 1000)
+
+
 DEFAULTS = {
     "window_x": None,
     "window_y": None,
@@ -21,6 +39,7 @@ DEFAULTS = {
     "minimize_to_tray": True,
     "start_minimized": False,
     "auto_connect": False,
+    "latency_profile": DEFAULT_LATENCY_PROFILE,
 }
 
 

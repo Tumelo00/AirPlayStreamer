@@ -73,6 +73,7 @@ class Streamer:
         self._active_sources: Dict[str, LiveAudioSource] = {}
         self._reconnect_attempts: Dict[str, int] = {}
         self._stop_requested = False
+        self._latency_samples = MIN_AIRPLAY_LATENCY_SAMPLES
 
         self._state_lock = threading.Lock()
 
@@ -135,6 +136,10 @@ class Streamer:
             asyncio.run_coroutine_threadsafe(
                 self._do_complete_pairing(device_id, pin), self._loop
             )
+
+    def set_latency_samples(self, samples: int) -> None:
+        """Set the AirPlay latency buffer size in samples (thread-safe)."""
+        self._latency_samples = max(2205, int(samples))
 
     def request_start_streaming(self, device_ids: List[str],
                                 audio_device: Optional[AudioDevice] = None) -> None:
@@ -307,7 +312,7 @@ class Streamer:
         session = RaopSession(atv, device.name)
 
         try:
-            await session.open(latency_samples=MIN_AIRPLAY_LATENCY_SAMPLES)
+            await session.open(latency_samples=self._latency_samples)
 
             source = LiveAudioSource(
                 self._ring_buffer,

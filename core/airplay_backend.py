@@ -74,10 +74,28 @@ class RaopSession:
             await client.initialize(raop.core.service.properties)
 
             if latency_samples is not None:
-                context.latency = latency_samples
+                self._apply_latency(context, latency_samples)
         except Exception as e:
             await self.close()
             raise AirPlayError(f"RAOP setup hatasi: {e}") from e
+
+    @staticmethod
+    def _apply_latency(context, latency_samples: int) -> None:
+        """Set context.latency and keep it after StreamContext.reset().
+
+        pyatv's send_audio() calls context.reset() which restores the
+        default latency. We shadow reset() on the instance so our value
+        survives.
+        """
+        context.latency = latency_samples
+        original_reset = context.reset
+
+        def reset_keeping_latency():
+            original_reset()
+            context.latency = latency_samples
+
+        context.reset = reset_keeping_latency
+        _LOGGER.info("AirPlay latency set to %d samples", latency_samples)
 
     @property
     def sample_rate(self) -> int:
