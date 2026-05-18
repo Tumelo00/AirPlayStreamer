@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Net;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
@@ -21,6 +22,13 @@ class Launcher
     const string MAIN_EXE = "AirPlayStreamer-Core.exe";
     const string PAYLOAD_RESOURCE = "Launcher.app.zip";
     const string VERSION_FILE = "payload.hash";
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+    [DllImport("user32.dll")]
+    static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")]
+    static extern bool SetForegroundWindow(IntPtr hWnd);
 
     [STAThread]
     static int Main()
@@ -95,7 +103,20 @@ class Launcher
                 }
             }
 
-            // 4. Launch main app
+            // 4. Single instance: if already running, focus it and exit
+            Process[] running = Process.GetProcessesByName("AirPlayStreamer-Core");
+            if (running.Length > 0)
+            {
+                IntPtr hwnd = FindWindow(null, "AirPlay Streamer");
+                if (hwnd != IntPtr.Zero)
+                {
+                    ShowWindow(hwnd, 9);            // SW_RESTORE
+                    SetForegroundWindow(hwnd);
+                }
+                return 0;
+            }
+
+            // 5. Launch main app
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = mainExePath;
             psi.WorkingDirectory = appDataDir;

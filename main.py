@@ -16,6 +16,33 @@ from core.network import patch_pyatv_connection
 from core.streamer import Streamer
 from ui.app import AirPlayStreamerApp
 
+# Holds the single-instance mutex for the process lifetime
+_SINGLE_INSTANCE_MUTEX = []
+
+
+def ensure_single_instance() -> bool:
+    """Return True if this is the only instance.
+
+    If another instance is already running, brings its window to the
+    front and returns False so the caller can exit.
+    """
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        ERROR_ALREADY_EXISTS = 183
+        mutex = kernel32.CreateMutexW(None, False, "AirPlayStreamerSingleInstance")
+        if kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
+            user32 = ctypes.windll.user32
+            hwnd = user32.FindWindowW(None, "AirPlay Streamer")
+            if hwnd:
+                user32.ShowWindow(hwnd, 9)        # SW_RESTORE
+                user32.SetForegroundWindow(hwnd)
+            return False
+        _SINGLE_INSTANCE_MUTEX.append(mutex)  # keep handle alive
+        return True
+    except Exception:
+        return True  # never block startup on this check
+
 
 def setup_logging():
     log_dir = os.path.join(os.environ.get("APPDATA", ""), "AirPlayStreamer")
@@ -38,6 +65,12 @@ def setup_logging():
 def main():
     setup_logging()
     logger = logging.getLogger(__name__)
+
+    # Single instance: if already running, focus it and exit
+    if not ensure_single_instance():
+        logger.info("Already running, focusing existing window.")
+        return
+
     logger.info("AirPlay Streamer starting...")
 
     # Force AirPlay connections onto the physical LAN interface.
