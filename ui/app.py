@@ -8,6 +8,7 @@ from core.config import Config
 from core.streamer import Streamer, StreamerState
 from ui.control_panel import ControlPanel
 from ui.device_panel import DevicePanel
+from ui.diagnostics_dialog import DiagnosticsDialog
 from ui.pairing_dialog import PairingDialog
 from ui.settings_dialog import SettingsDialog
 from ui.status_bar import StatusBar
@@ -75,15 +76,27 @@ class AirPlayStreamerApp(ctk.CTk):
             text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, sticky="w")
 
-        # Settings button
+        # Header buttons (diagnostics + settings)
+        btn_box = ctk.CTkFrame(header, fg_color="transparent")
+        btn_box.grid(row=0, column=1, sticky="e")
+
+        self._diag_btn = ctk.CTkButton(
+            btn_box, text="\u2261", width=36, height=36,
+            font=ctk.CTkFont(size=18),
+            fg_color=BG_CARD, hover_color=BG_INPUT,
+            corner_radius=8,
+            command=self._open_diagnostics,
+        )
+        self._diag_btn.pack(side="left", padx=(0, 6))
+
         self._settings_btn = ctk.CTkButton(
-            header, text="\u2699", width=36, height=36,
+            btn_box, text="\u2699", width=36, height=36,
             font=ctk.CTkFont(size=18),
             fg_color=BG_CARD, hover_color=BG_INPUT,
             corner_radius=8,
             command=self._open_settings,
         )
-        self._settings_btn.grid(row=0, column=1, sticky="e")
+        self._settings_btn.pack(side="left")
 
         ctk.CTkLabel(
             header, text=S["app_subtitle"],
@@ -199,6 +212,9 @@ class AirPlayStreamerApp(ctk.CTk):
 
     def _on_settings_saved(self, config: Config):
         self._config = config
+
+    def _open_diagnostics(self):
+        DiagnosticsDialog(self, self._streamer)
 
     # ── Window management ──
 

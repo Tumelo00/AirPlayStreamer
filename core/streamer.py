@@ -21,7 +21,8 @@ from core.airplay_backend import RaopSession
 from core.audio_capture import AudioCapture, AudioDevice
 from core.audio_source import LiveAudioSource
 from core.device_manager import AirPlayDevice, DeviceManager, DeviceState
-from core.network import friendly_error
+from core.network import find_lan_route, friendly_error
+from core.resampler import resampler_backend
 from core.ring_buffer import RingBuffer
 
 _LOGGER = logging.getLogger(__name__)
@@ -178,6 +179,37 @@ class Streamer:
     def get_loopback_devices(self) -> List[AudioDevice]:
         """Get available loopback audio devices (thread-safe)."""
         return self._capture.get_loopback_devices()
+
+    def get_diagnostics(self) -> dict:
+        """Return a diagnostics snapshot for the diagnostics panel."""
+        dev = self._capture.current_device
+        connected = self._device_manager.get_connected_devices()
+        homepod_ip = connected[0].address if connected else "-"
+
+        local_ip, iface = (None, None)
+        if homepod_ip and homepod_ip != "-":
+            try:
+                local_ip, iface = find_lan_route(homepod_ip)
+            except Exception:
+                pass
+
+        with self._state_lock:
+            state = self._state.value
+            error = self._error_message or "-"
+            reconnects = max(self._reconnect_attempts.values(), default=0)
+
+        return {
+            "state": state,
+            "capture_device": dev.name if dev else "-",
+            "capture_rate": dev.sample_rate if dev else 0,
+            "homepod_ip": homepod_ip,
+            "local_ip": local_ip or "-",
+            "interface": iface or "-",
+            "latency_samples": self._latency_samples,
+            "reconnect_attempts": reconnects,
+            "resampler": resampler_backend(),
+            "error": error,
+        }
 
     # ── Internal async operations ──
 
