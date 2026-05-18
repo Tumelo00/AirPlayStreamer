@@ -15,7 +15,7 @@ from pyatv.storage.file_storage import FileStorage
 
 _LOGGER = logging.getLogger(__name__)
 
-SCAN_TIMEOUT = 5
+SCAN_TIMEOUT = 8
 CREDENTIALS_DIR = os.path.join(os.environ.get("APPDATA", ""), "AirPlayStreamer")
 
 
@@ -62,6 +62,44 @@ class DeviceManager:
             await self._storage.load()
         return self._storage
 
+    @staticmethod
+    def _select_grouped_configs(configs):
+        """Collapse stereo-paired / grouped AirPlay devices.
+
+        HomePods in a stereo pair advertise the same 'gid'. AirPlay
+        streaming must go to the group leader (igl=1), which relays
+        to followers in perfect sync.
+
+        Returns (visible, followers):
+          visible   - list of (config, display_name) to show
+          followers - set of identifiers that are group followers and
+                      must be hidden / purged from the device list
+        """
+        airplay = [c for c in configs if c.get_service(Protocol.AirPlay)]
+        visible = []
+        followers = set()
+
+        for c in airplay:
+            props = c.get_service(Protocol.AirPlay).properties or {}
+            gid = props.get("gid")
+            igl = props.get("igl")
+            gpn = props.get("gpn")
+
+            # A grouped follower: never shown, streaming goes via leader
+            if gid and igl == "0":
+                followers.add(c.identifier)
+                continue
+
+            # Grouped leader: show under the group name
+            if gid and igl == "1" and gpn:
+                visible.append((c, gpn))
+                _LOGGER.info("Group leader '%s' (gid=%s)", gpn, gid[:16])
+            else:
+                # Standalone device (no group, or group of one)
+                visible.append((c, c.name))
+
+        return visible, followers
+
     async def scan(self, timeout: int = SCAN_TIMEOUT) -> List[AirPlayDevice]:
         """Scan for AirPlay devices on the network."""
         _LOGGER.info("Scanning for AirPlay devices (timeout=%ds)...", timeout)
@@ -74,14 +112,17 @@ class DeviceManager:
         )
 
         with self._devices_lock:
-            for config in configs:
-                if not config.get_service(Protocol.AirPlay):
-                    continue
+            grouped, followers = self._select_grouped_configs(configs)
 
+            # Purge any follower we may have shown in an earlier scan
+            for fid in followers:
+                self._devices.pop(fid, None)
+
+            for config, display_name in grouped:
                 identifier = config.identifier
                 if identifier in self._devices:
                     dev = self._devices[identifier]
-                    dev.name = config.name
+                    dev.name = display_name
                     dev.address = str(config.address)
                     dev.config = config
                     if dev.state == DeviceState.DISCONNECTED:
@@ -89,7 +130,7 @@ class DeviceManager:
                 else:
                     self._devices[identifier] = AirPlayDevice(
                         identifier=identifier,
-                        name=config.name,
+                        name=display_name,
                         address=str(config.address),
                         config=config,
                     )

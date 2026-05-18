@@ -211,10 +211,10 @@ class DevicePanel(ctk.CTkFrame):
                 card.pack(fill="x", pady=4, padx=5)
                 self._cards[device.identifier] = card
 
-                # Auto-select only the FIRST HomePod (stereo pair handles sync)
+                # Auto-select the first HomePod / speaker (not a TV)
                 name_lower = device.name.lower()
-                is_homepod = 'homepod' in name_lower or 'bedroom' in name_lower
-                if is_homepod and len(self._selected_ids) == 0:
+                is_tv = 'tv' in name_lower or 'apple tv' in name_lower
+                if not is_tv and len(self._selected_ids) == 0:
                     card.set_selected(True)
                     self._selected_ids.add(device.identifier)
 
