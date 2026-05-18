@@ -12,6 +12,11 @@ from typing import Callable, Dict, List, Optional
 MIN_AIRPLAY_LATENCY_SAMPLES = 4410  # ~0.1s at 44100Hz (default is 22050+sr ~1.5s)
 RING_BUFFER_BYTES = 17640           # ~100ms at 44100Hz stereo 16-bit (jitter tolerance)
 
+# Reconnect / recovery
+RECONNECT_BACKOFF_START = 1.0       # seconds
+RECONNECT_BACKOFF_MAX = 30.0        # seconds
+RECONNECT_MAX_ATTEMPTS = 10
+
 from core.airplay_backend import RaopSession
 from core.audio_capture import AudioCapture, AudioDevice
 from core.audio_source import LiveAudioSource
@@ -40,6 +45,7 @@ class StreamerStatus:
     packets_sent: int = 0
     error_message: str = ""
     is_capturing: bool = False
+    reconnect_attempts: int = 0
 
     def __post_init__(self):
         if self.devices is None:
@@ -65,6 +71,8 @@ class Streamer:
         self._packets_sent = 0
         self._stream_tasks: Dict[str, asyncio.Task] = {}
         self._active_sources: Dict[str, LiveAudioSource] = {}
+        self._reconnect_attempts: Dict[str, int] = {}
+        self._stop_requested = False
 
         self._state_lock = threading.Lock()
 
@@ -158,6 +166,8 @@ class Streamer:
                 packets_sent=self._packets_sent,
                 error_message=self._error_message,
                 is_capturing=self._capture.is_running,
+                reconnect_attempts=max(self._reconnect_attempts.values(),
+                                       default=0),
             )
 
     def get_loopback_devices(self) -> List[AudioDevice]:
@@ -215,10 +225,11 @@ class Streamer:
             self._ring_buffer.clear()
             self._capture.start(audio_device)
 
-            # Start streaming to each connected device
+            # Start a supervised stream task per device (handles reconnect)
+            self._stop_requested = False
             for device in connected:
                 task = asyncio.ensure_future(
-                    self._stream_to_device(device)
+                    self._supervise_device(device)
                 )
                 task.add_done_callback(self._on_stream_task_done)
                 self._stream_tasks[device.identifier] = task
@@ -233,11 +244,63 @@ class Streamer:
                 self._state = StreamerState.ERROR
                 self._error_message = str(e)
 
+    async def _supervise_device(self, device: AirPlayDevice):
+        """Supervise streaming to one device: auto-reconnect with backoff.
+
+        Retries on unexpected stream drops. Stops cleanly when the user
+        presses Stop (CancelledError or _stop_requested).
+        """
+        backoff = RECONNECT_BACKOFF_START
+        self._reconnect_attempts[device.identifier] = 0
+
+        while not self._stop_requested:
+            try:
+                await self._stream_to_device(device)
+                # Clean return = user stopped (source returned NO_FRAMES)
+                return
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                friendly = friendly_error(e)
+                device.error_message = friendly
+                _LOGGER.warning("Stream to %s dropped: %s", device.name, e)
+
+            if self._stop_requested:
+                return
+
+            # Reconnect with exponential backoff
+            attempts = self._reconnect_attempts.get(device.identifier, 0) + 1
+            self._reconnect_attempts[device.identifier] = attempts
+            if attempts > RECONNECT_MAX_ATTEMPTS:
+                _LOGGER.error("Giving up on %s after %d attempts",
+                              device.name, attempts)
+                device.state = DeviceState.ERROR
+                return
+
+            device.state = DeviceState.CONNECTING
+            _LOGGER.info("Reconnecting to %s in %.1fs (attempt %d)",
+                         device.name, backoff, attempts)
+            try:
+                await asyncio.sleep(backoff)
+            except asyncio.CancelledError:
+                return
+            backoff = min(backoff * 2, RECONNECT_BACKOFF_MAX)
+
+            if self._stop_requested:
+                return
+
+            try:
+                await self._device_manager.connect(device.identifier)
+                if device.connection:
+                    backoff = RECONNECT_BACKOFF_START  # reset on success
+            except Exception as e:
+                _LOGGER.warning("Reconnect to %s failed: %s", device.name, e)
+
     async def _stream_to_device(self, device: AirPlayDevice):
-        """Stream audio to a single device via the AirPlay backend."""
+        """One streaming attempt. Returns on clean stop, raises on failure."""
         atv = device.connection
         if not atv:
-            return
+            raise RuntimeError(f"{device.name} baglantisi yok")
 
         device.state = DeviceState.STREAMING
         source = None
@@ -246,7 +309,6 @@ class Streamer:
         try:
             await session.open(latency_samples=MIN_AIRPLAY_LATENCY_SAMPLES)
 
-            # Create our live audio source (unique reader per device)
             source = LiveAudioSource(
                 self._ring_buffer,
                 sample_rate=session.sample_rate,
@@ -261,23 +323,16 @@ class Streamer:
 
             # Blocks until source returns NO_FRAMES (when we stop)
             await session.stream(source)
+            # Reset reconnect counter on a healthy session end
+            self._reconnect_attempts[device.identifier] = 0
 
-        except asyncio.CancelledError:
-            _LOGGER.info("Stream to %s cancelled", device.name)
-        except Exception as e:
-            _LOGGER.error("Stream error for %s: %s\n%s", device.name, e,
-                          traceback.format_exc())
-            friendly = friendly_error(e)
-            device.error_message = friendly
-            with self._state_lock:
-                if not self._error_message:
-                    self._error_message = f"{device.name}: {friendly}"
         finally:
             await session.close()
             if source:
                 source.stop()
                 self._active_sources.pop(device.identifier, None)
-            device.state = DeviceState.CONNECTED if device.connection else DeviceState.DISCONNECTED
+            if not self._stop_requested and device.connection:
+                device.state = DeviceState.CONNECTED
 
     async def _do_stop_streaming(self):
         with self._state_lock:
@@ -291,12 +346,15 @@ class Streamer:
             self._packets_sent = 0
 
     async def _stop_all_streams(self):
+        # Stop reconnect supervision first
+        self._stop_requested = True
+
         # Signal all sources to stop
-        for source in self._active_sources.values():
+        for source in list(self._active_sources.values()):
             source.stop()
 
-        # Cancel all stream tasks
-        for task in self._stream_tasks.values():
+        # Cancel all supervisor tasks
+        for task in list(self._stream_tasks.values()):
             task.cancel()
 
         # Wait for tasks to finish
