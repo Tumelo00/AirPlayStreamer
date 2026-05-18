@@ -12,11 +12,7 @@ from typing import Callable, Dict, List, Optional
 MIN_AIRPLAY_LATENCY_SAMPLES = 4410  # ~0.1s at 44100Hz (default is 22050+sr ~1.5s)
 RING_BUFFER_BYTES = 17640           # ~100ms at 44100Hz stereo 16-bit (jitter tolerance)
 
-from pyatv.const import Protocol
-from pyatv.interface import AppleTV, Audio, MediaMetadata, Metadata, PushUpdater, RemoteControl
-from pyatv.protocols.airplay.auth import extract_credentials
-from pyatv.protocols.raop import RaopStream
-
+from core.airplay_backend import RaopSession
 from core.audio_capture import AudioCapture, AudioDevice
 from core.audio_source import LiveAudioSource
 from core.device_manager import AirPlayDevice, DeviceManager, DeviceState
@@ -238,68 +234,33 @@ class Streamer:
                 self._error_message = str(e)
 
     async def _stream_to_device(self, device: AirPlayDevice):
-        """Stream audio to a single device using pyatv's internal RAOP pipeline."""
+        """Stream audio to a single device via the AirPlay backend."""
         atv = device.connection
         if not atv:
             return
 
         device.state = DeviceState.STREAMING
         source = None
+        session = RaopSession(atv, device.name)
 
         try:
-            # Get the actual RaopStream from FacadeStream instances
-            raop_stream = None
-            for inst in atv.stream.instances:
-                if isinstance(inst, RaopStream):
-                    raop_stream = inst
-                    break
+            await session.open(latency_samples=MIN_AIRPLAY_LATENCY_SAMPLES)
 
-            if raop_stream is None:
-                raise RuntimeError(f"RaopStream bulunamadi: {device.name}")
-
-            # Access internal playback manager to set up RAOP session
-            raop_stream.playback_manager.acquire()
-            takeover_release = raop_stream.core.takeover(
-                Audio, Metadata, PushUpdater, RemoteControl
+            # Create our live audio source (unique reader per device)
+            source = LiveAudioSource(
+                self._ring_buffer,
+                sample_rate=session.sample_rate,
+                channels=session.channels,
+                sample_size=session.sample_size,
+                reader_id=device.identifier,
             )
-            try:
-                client, context = await raop_stream.playback_manager.setup(
-                    raop_stream.core.service
-                )
-                context.credentials = extract_credentials(raop_stream.core.service)
-                context.password = raop_stream.core.service.password
+            self._active_sources[device.identifier] = source
 
-                client.listener = raop_stream.listener
-                await client.initialize(raop_stream.core.service.properties)
+            _LOGGER.info("Starting stream to %s (%dHz, %dch)",
+                         device.name, session.sample_rate, session.channels)
 
-                # Reduce AirPlay latency buffer for near-real-time streaming
-                # (default ~1.5s, we use ~0.1s)
-                context.latency = MIN_AIRPLAY_LATENCY_SAMPLES
-
-                # Create our live audio source (unique reader per device)
-                source = LiveAudioSource(
-                    self._ring_buffer,
-                    sample_rate=context.sample_rate,
-                    channels=context.channels,
-                    sample_size=context.bytes_per_channel,
-                    reader_id=device.identifier,
-                )
-                self._active_sources[device.identifier] = source
-
-                metadata = MediaMetadata(
-                    title="Sistem Sesi",
-                    artist="AirPlay Streamer",
-                )
-
-                _LOGGER.info("Starting stream to %s (%dHz, %dch)",
-                             device.name, context.sample_rate, context.channels)
-
-                # This blocks until source returns NO_FRAMES (when we stop)
-                await client.send_audio(source, metadata)
-
-            finally:
-                takeover_release()
-                await raop_stream.playback_manager.teardown()
+            # Blocks until source returns NO_FRAMES (when we stop)
+            await session.stream(source)
 
         except asyncio.CancelledError:
             _LOGGER.info("Stream to %s cancelled", device.name)
@@ -312,6 +273,7 @@ class Streamer:
                 if not self._error_message:
                     self._error_message = f"{device.name}: {friendly}"
         finally:
+            await session.close()
             if source:
                 source.stop()
                 self._active_sources.pop(device.identifier, None)
