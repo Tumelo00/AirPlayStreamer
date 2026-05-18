@@ -77,6 +77,7 @@ class Streamer:
         self._stop_requested = False
         self._latency_samples = MIN_AIRPLAY_LATENCY_SAMPLES
         self._device_delays: Dict[str, int] = {}  # device_id -> ms
+        self._sync_start_ts: Optional[int] = None  # shared RTP origin
 
         self._state_lock = threading.Lock()
 
@@ -297,6 +298,18 @@ class Streamer:
             self._capture.start(audio_device)
             await asyncio.sleep(0.25)
 
+            # Compute one shared RTP start timestamp so every device plays
+            # the same audio at the same wall-clock time (auto multi-sync)
+            self._sync_start_ts = None
+            if len(connected) > 1:
+                try:
+                    from pyatv.protocols.raop import timing
+                    self._sync_start_ts = timing.ntp2ts(timing.ntp_now(), 44100)
+                    _LOGGER.info("Multi-device sync start_ts=%s",
+                                 self._sync_start_ts)
+                except Exception as e:
+                    _LOGGER.warning("Could not compute sync start_ts: %s", e)
+
             # Start a supervised stream task per device (handles reconnect)
             self._stop_requested = False
             for device in connected:
@@ -379,7 +392,8 @@ class Streamer:
         session = RaopSession(atv, device.name)
 
         try:
-            await session.open(latency_samples=self._latency_samples)
+            await session.open(latency_samples=self._latency_samples,
+                               sync_start_ts=self._sync_start_ts)
 
             source = LiveAudioSource(
                 self._ring_buffer,

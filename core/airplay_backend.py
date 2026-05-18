@@ -51,8 +51,14 @@ class RaopSession:
                 return inst
         return None
 
-    async def open(self, latency_samples: Optional[int] = None) -> None:
-        """Set up the RAOP session. Raises AirPlayError on failure."""
+    async def open(self, latency_samples: Optional[int] = None,
+                   sync_start_ts: Optional[int] = None) -> None:
+        """Set up the RAOP session. Raises AirPlayError on failure.
+
+        sync_start_ts: when set, forces this session's RTP start timestamp
+        to a shared value so multiple devices play the same audio at the
+        same wall-clock time (automatic multi-device synchronization).
+        """
         raop = self.find_raop_stream(self._atv)
         if raop is None:
             raise AirPlayError(f"RaopStream bulunamadi: {self._device_name}")
@@ -74,35 +80,38 @@ class RaopSession:
             client.listener = raop.listener
             await client.initialize(raop.core.service.properties)
 
-            if latency_samples is not None:
-                self._apply_latency(context, latency_samples)
+            if latency_samples is not None or sync_start_ts is not None:
+                self._apply_timing(context, latency_samples, sync_start_ts)
         except Exception as e:
             await self.close()
             raise AirPlayError(f"RAOP setup hatasi: {e}") from e
 
-    def _apply_latency(self, context, latency_samples: int) -> None:
-        """Set context.latency and keep it after StreamContext.reset().
+    def _apply_timing(self, context, latency_samples, sync_start_ts) -> None:
+        """Pin latency and (optionally) a shared RTP start timestamp.
 
         pyatv's send_audio() calls context.reset() which restores the
-        default latency. We shadow reset() on the instance so our value
-        survives.
+        default latency and assigns a fresh start_ts. We shadow reset()
+        on the instance so our values survive - giving every device the
+        same timeline for automatic synchronization.
         """
         self._requested_latency = latency_samples
-        context.latency = latency_samples
         original_reset = context.reset
 
-        def reset_keeping_latency():
-            before = context.latency
+        def reset_keeping_timing():
             original_reset()
-            after_reset = context.latency
-            context.latency = latency_samples
-            _LOGGER.info("latency: reset patch [%s] before=%s after_reset=%s "
-                         "-> kept=%d", self._device_name, before, after_reset,
-                         latency_samples)
+            if latency_samples is not None:
+                context.latency = latency_samples
+            if sync_start_ts is not None:
+                context.start_ts = sync_start_ts
+                context.head_ts = sync_start_ts
+            _LOGGER.info("timing [%s]: latency=%s start_ts=%s",
+                         self._device_name, context.latency, context.start_ts)
 
-        context.reset = reset_keeping_latency
-        _LOGGER.info("latency: requested=%d samples for %s",
-                     latency_samples, self._device_name)
+        context.reset = reset_keeping_timing
+        if latency_samples is not None:
+            context.latency = latency_samples
+        _LOGGER.info("timing: %s latency=%s sync_start_ts=%s",
+                     self._device_name, latency_samples, sync_start_ts)
 
     @property
     def sample_rate(self) -> int:
