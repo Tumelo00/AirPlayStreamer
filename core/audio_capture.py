@@ -7,6 +7,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import pyaudiowpatch as pyaudio
 
+from core.resampler import Resampler
 from core.ring_buffer import RingBuffer
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,11 +41,7 @@ class AudioCapture:
         self._lock = threading.Lock()
         self._callback_errors = 0
         self._max_callback_errors = 50  # Stop after too many consecutive errors
-
-        # Pre-computed resample interpolation coefficients (filled on start())
-        self._resample_x_old: Optional[np.ndarray] = None
-        self._resample_x_new: Optional[np.ndarray] = None
-        self._resample_dst_frames = 0
+        self._resampler: Optional[Resampler] = None
 
     def get_loopback_devices(self) -> List[AudioDevice]:
         devices: List[AudioDevice] = []
@@ -109,14 +106,6 @@ class AudioCapture:
         _LOGGER.info("Using first available loopback: %s", devices[0].name)
         return devices[0]
 
-    def _precompute_resample(self, src_rate: int, src_frames_per_buffer: int) -> None:
-        """Pre-compute interp arrays for fast hot-path resampling."""
-        dst_frames = int(src_frames_per_buffer * TARGET_SAMPLE_RATE / src_rate)
-        self._resample_dst_frames = dst_frames
-        if dst_frames > 0:
-            self._resample_x_old = np.linspace(0, 1, src_frames_per_buffer, dtype=np.float64)
-            self._resample_x_new = np.linspace(0, 1, dst_frames, dtype=np.float64)
-
     def start(self, device: Optional[AudioDevice] = None) -> None:
         with self._lock:
             if self._running:
@@ -134,8 +123,11 @@ class AudioCapture:
             src_ch = chosen.channels
             needs_convert = (src_rate != TARGET_SAMPLE_RATE or src_ch != TARGET_CHANNELS)
 
-            if needs_convert and src_rate != TARGET_SAMPLE_RATE:
-                self._precompute_resample(src_rate, FRAMES_PER_BUFFER)
+            # Resampler operates on channel-converted (stereo) data
+            self._resampler = None
+            if src_rate != TARGET_SAMPLE_RATE:
+                self._resampler = Resampler(src_rate, TARGET_SAMPLE_RATE,
+                                            TARGET_CHANNELS)
 
             def audio_callback(in_data, frame_count, time_info, status):
                 try:
@@ -204,7 +196,7 @@ class AudioCapture:
         if src_channels > 0:
             samples = samples.reshape(-1, src_channels)
 
-        # Channel conversion
+        # Channel conversion (cheap, inline)
         if src_channels != dst_channels:
             if dst_channels == 2 and src_channels == 1:
                 samples = np.column_stack([samples, samples])
@@ -213,32 +205,8 @@ class AudioCapture:
             elif dst_channels == 2 and src_channels > 2:
                 samples = samples[:, :2]
 
-        # Resample using pre-computed interpolation arrays when possible
-        if src_rate != dst_rate:
-            src_frames = samples.shape[0]
-            if (self._resample_x_old is not None
-                    and src_frames == len(self._resample_x_old)
-                    and self._resample_dst_frames > 0):
-                # Fast path: pre-computed coefficients
-                resampled = np.empty(
-                    (self._resample_dst_frames, samples.shape[1]), dtype=np.int16)
-                for ch in range(samples.shape[1]):
-                    resampled[:, ch] = np.interp(
-                        self._resample_x_new, self._resample_x_old,
-                        samples[:, ch].astype(np.float64)
-                    ).astype(np.int16)
-                samples = resampled
-            else:
-                # Slow path: dynamic computation
-                dst_frames = int(src_frames * dst_rate / src_rate)
-                if dst_frames > 0:
-                    x_old = np.linspace(0, 1, src_frames)
-                    x_new = np.linspace(0, 1, dst_frames)
-                    resampled = np.empty((dst_frames, samples.shape[1]), dtype=np.int16)
-                    for ch in range(samples.shape[1]):
-                        resampled[:, ch] = np.interp(
-                            x_new, x_old, samples[:, ch].astype(np.float64)
-                        ).astype(np.int16)
-                    samples = resampled
+        # Resample via the Resampler (soxr if available, numpy fallback)
+        if src_rate != dst_rate and self._resampler is not None:
+            samples = self._resampler.process(np.ascontiguousarray(samples))
 
         return samples.tobytes()
