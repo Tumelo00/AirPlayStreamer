@@ -20,6 +20,7 @@ from pyatv.protocols.raop import RaopStream
 from core.audio_capture import AudioCapture, AudioDevice
 from core.audio_source import LiveAudioSource
 from core.device_manager import AirPlayDevice, DeviceManager, DeviceState
+from core.network import friendly_error
 from core.ring_buffer import RingBuffer
 
 _LOGGER = logging.getLogger(__name__)
@@ -305,10 +306,11 @@ class Streamer:
         except Exception as e:
             _LOGGER.error("Stream error for %s: %s\n%s", device.name, e,
                           traceback.format_exc())
-            device.error_message = str(e)
+            friendly = friendly_error(e)
+            device.error_message = friendly
             with self._state_lock:
                 if not self._error_message:
-                    self._error_message = f"{device.name}: {e}"
+                    self._error_message = f"{device.name}: {friendly}"
         finally:
             if source:
                 source.stop()
