@@ -100,10 +100,12 @@ class DeviceCard(ctk.CTkFrame):
 class DevicePanel(ctk.CTkFrame):
     """Panel showing discovered AirPlay devices with controls."""
 
-    def __init__(self, master, on_scan: Callable, on_pair: Callable, **kwargs):
+    def __init__(self, master, on_scan: Callable, on_pair: Callable,
+                 on_selection_change: Callable = None, **kwargs):
         super().__init__(master, fg_color=BG_CARD, corner_radius=12, **kwargs)
         self._on_scan = on_scan
         self._on_pair = on_pair
+        self._on_selection_change = on_selection_change
         self._cards: Dict[str, DeviceCard] = {}
         self._selected_ids: set = set()
         self._last_device_count = -1
@@ -153,6 +155,8 @@ class DevicePanel(ctk.CTkFrame):
             self._selected_ids.add(device_id)
         else:
             self._selected_ids.discard(device_id)
+        if self._on_selection_change:
+            self._on_selection_change(device_id, selected)
 
     def get_selected_device_ids(self) -> List[str]:
         return list(self._selected_ids)

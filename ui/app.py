@@ -109,6 +109,7 @@ class AirPlayStreamerApp(ctk.CTk):
             self,
             on_scan=self._on_scan,
             on_pair=self._on_pair,
+            on_selection_change=self._on_device_selection_change,
         )
         self._device_panel.pack(fill="both", expand=True, padx=15, pady=(10, 5))
 
@@ -194,6 +195,16 @@ class AirPlayStreamerApp(ctk.CTk):
 
     def _on_stop(self):
         self._streamer.request_stop_streaming()
+
+    def _on_device_selection_change(self, device_id: str, selected: bool):
+        # While streaming, add/remove devices live
+        status = self._streamer.get_status()
+        if status.state != StreamerState.STREAMING:
+            return
+        if selected:
+            self._streamer.request_add_device(device_id)
+        else:
+            self._streamer.request_remove_device(device_id)
 
     def _on_volume(self, volume: float):
         status = self._streamer.get_status()

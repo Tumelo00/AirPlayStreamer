@@ -155,6 +155,18 @@ class Streamer:
         if self._loop:
             asyncio.run_coroutine_threadsafe(self._do_stop_streaming(), self._loop)
 
+    def request_add_device(self, device_id: str) -> None:
+        """Add a device to the live stream (no-op if not streaming)."""
+        if self._loop:
+            asyncio.run_coroutine_threadsafe(
+                self._do_add_device(device_id), self._loop)
+
+    def request_remove_device(self, device_id: str) -> None:
+        """Stop streaming to one device, keep the rest running."""
+        if self._loop:
+            asyncio.run_coroutine_threadsafe(
+                self._do_remove_device(device_id), self._loop)
+
     def request_set_volume(self, device_id: str, volume: float) -> None:
         """Set volume for a device (0-100)."""
         if self._loop:
@@ -372,6 +384,38 @@ class Streamer:
                 self._active_sources.pop(device.identifier, None)
             if not self._stop_requested and device.connection:
                 device.state = DeviceState.CONNECTED
+
+    async def _do_add_device(self, device_id: str):
+        """Connect and start a supervised stream to one more device."""
+        with self._state_lock:
+            streaming = self._state == StreamerState.STREAMING
+        if not streaming or device_id in self._stream_tasks:
+            return
+
+        device = self._device_manager.get_device(device_id)
+        if not device:
+            return
+        try:
+            if device.state != DeviceState.CONNECTED:
+                await self._device_manager.connect(device_id)
+            if not device.connection:
+                return
+            task = asyncio.ensure_future(self._supervise_device(device))
+            task.add_done_callback(self._on_stream_task_done)
+            self._stream_tasks[device_id] = task
+            _LOGGER.info("Added device to live stream: %s", device.name)
+        except Exception as e:
+            _LOGGER.error("Failed to add device %s: %s", device_id, e)
+
+    async def _do_remove_device(self, device_id: str):
+        """Stop streaming to one device without touching the others."""
+        source = self._active_sources.pop(device_id, None)
+        if source:
+            source.stop()
+        task = self._stream_tasks.pop(device_id, None)
+        if task:
+            task.cancel()
+        _LOGGER.info("Removed device from live stream: %s", device_id)
 
     async def _do_stop_streaming(self):
         with self._state_lock:
