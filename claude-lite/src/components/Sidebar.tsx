@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { exportConversationToMarkdown } from "@/lib/export";
 import {
   deleteConversation,
   listConversations,
@@ -47,6 +48,15 @@ export function Sidebar({ activeId, onSelect, onNew, refreshKey }: Props) {
     e.stopPropagation();
     setEditingId(c.id);
     setEditText(c.title);
+  };
+
+  const handleExport = async (e: React.MouseEvent, c: Conversation) => {
+    e.stopPropagation();
+    try {
+      await exportConversationToMarkdown(c);
+    } catch (err) {
+      alert(`Export hatası: ${err}`);
+    }
   };
 
   const commitEdit = async (c: Conversation) => {
@@ -134,6 +144,7 @@ export function Sidebar({ activeId, onSelect, onNew, refreshKey }: Props) {
             onCommitEdit={() => commitEdit(c)}
             onCancelEdit={cancelEdit}
             onDelete={(e) => handleDelete(e, c.id)}
+            onExport={(e) => handleExport(e, c)}
           />
         ))}
       </div>
@@ -152,6 +163,7 @@ function ConversationRow({
   onCommitEdit,
   onCancelEdit,
   onDelete,
+  onExport,
 }: {
   conversation: Conversation;
   active: boolean;
@@ -163,6 +175,7 @@ function ConversationRow({
   onCommitEdit: () => void;
   onCancelEdit: () => void;
   onDelete: (e: React.MouseEvent) => void;
+  onExport: (e: React.MouseEvent) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -210,6 +223,14 @@ function ConversationRow({
         {conversation.title || "Adsız sohbet"}
       </span>
       <span className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 ml-2">
+        <button
+          onClick={onExport}
+          className="text-zinc-500 hover:text-zinc-200 px-1"
+          aria-label="Markdown olarak dışa aktar"
+          title="Markdown olarak kaydet"
+        >
+          ↓
+        </button>
         <button
           onClick={onStartEdit}
           className="text-zinc-500 hover:text-zinc-200 px-1"

@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import {
   checkClaudeCli,
   installClaudeCli,
+  listMcpServers,
   openClaudeLogin,
   type CliStatus,
+  type McpServer,
 } from "@/lib/claude";
 
 interface Props {
@@ -15,6 +17,8 @@ export function Settings({ onClose }: Props) {
   const [checking, setChecking] = useState(true);
   const [installing, setInstalling] = useState(false);
   const [installLog, setInstallLog] = useState<string[]>([]);
+  const [mcpServers, setMcpServers] = useState<McpServer[] | null>(null);
+  const [mcpLoading, setMcpLoading] = useState(false);
   const logBoxRef = useRef<HTMLDivElement>(null);
 
   const refresh = async () => {
@@ -22,8 +26,23 @@ export function Settings({ onClose }: Props) {
     try {
       const s = await checkClaudeCli();
       setStatus(s);
+      if (s.installed && s.loggedIn) {
+        refreshMcp();
+      }
     } finally {
       setChecking(false);
+    }
+  };
+
+  const refreshMcp = async () => {
+    setMcpLoading(true);
+    try {
+      const list = await listMcpServers();
+      setMcpServers(list);
+    } catch {
+      setMcpServers([]);
+    } finally {
+      setMcpLoading(false);
     }
   };
 
@@ -189,6 +208,51 @@ export function Settings({ onClose }: Props) {
                   </p>
                 </div>
               )}
+
+              {status.installed && status.loggedIn && (
+                <div className="pt-3 border-t border-zinc-800/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-medium">MCP Sunucular</h3>
+                    <button
+                      onClick={refreshMcp}
+                      disabled={mcpLoading}
+                      className="text-[10px] text-zinc-500 hover:text-zinc-200"
+                    >
+                      {mcpLoading ? "Yükleniyor…" : "Yenile"}
+                    </button>
+                  </div>
+                  {mcpServers === null && !mcpLoading && (
+                    <p className="text-xs text-zinc-600">Liste henüz alınmadı.</p>
+                  )}
+                  {mcpServers && mcpServers.length === 0 && (
+                    <p className="text-xs text-zinc-600">
+                      Yapılandırılmış MCP sunucusu yok.{" "}
+                      <code className="bg-zinc-800 px-1 rounded">claude mcp add</code>{" "}
+                      ile ekleyebilirsin.
+                    </p>
+                  )}
+                  {mcpServers && mcpServers.length > 0 && (
+                    <ul className="space-y-1">
+                      {mcpServers.map((s) => (
+                        <li
+                          key={s.name}
+                          className="text-xs bg-zinc-950/60 border border-zinc-800 rounded px-2 py-1.5 flex items-center justify-between gap-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="font-mono truncate">{s.name}</div>
+                            {s.details && (
+                              <div className="text-[10px] text-zinc-500 truncate">
+                                {s.details}
+                              </div>
+                            )}
+                          </div>
+                          <McpBadge status={s.status} />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -220,5 +284,21 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
       <span className="text-sm text-zinc-400">{label}</span>
       <span className="text-sm">{value}</span>
     </div>
+  );
+}
+
+function McpBadge({ status }: { status: string }) {
+  const color =
+    status === "connected"
+      ? "text-green-400 bg-green-950/50 border-green-900/50"
+      : status === "failed"
+      ? "text-red-400 bg-red-950/50 border-red-900/50"
+      : "text-zinc-400 bg-zinc-800 border-zinc-700";
+  const label =
+    status === "connected" ? "bağlı" : status === "failed" ? "hata" : "tanımlı";
+  return (
+    <span className={`text-[10px] border rounded px-1.5 py-0.5 ${color}`}>
+      {label}
+    </span>
   );
 }

@@ -72,6 +72,13 @@ pub struct CliStatus {
     pub path: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct McpServer {
+    pub name: String,
+    pub status: String,
+    pub details: Option<String>,
+}
+
 fn resolve_claude_path() -> Option<String> {
     let mut candidates: Vec<String> = vec![
         "/opt/homebrew/bin/claude".into(),
@@ -427,6 +434,62 @@ fn uuid_v4() -> String {
         bytes[8], bytes[9], bytes[10], bytes[11],
         bytes[12], bytes[13], bytes[14], bytes[15]
     )
+}
+
+pub async fn list_mcp_servers() -> Result<Vec<McpServer>> {
+    let path =
+        resolve_claude_path().ok_or_else(|| anyhow!("Claude CLI bulunamadı."))?;
+
+    let output = Command::new(&path)
+        .args(["mcp", "list"])
+        .stdin(Stdio::null())
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut servers = Vec::new();
+
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty()
+            || line.starts_with("No MCP")
+            || line.starts_with("Configured")
+            || line.starts_with("─")
+            || line.starts_with("=")
+        {
+            continue;
+        }
+
+        if let Some((name, rest)) = line.split_once(':') {
+            let rest = rest.trim();
+            let (status, details) = if rest.contains("✓")
+                || rest.to_lowercase().contains("connect")
+            {
+                ("connected".to_string(), Some(rest.to_string()))
+            } else if rest.contains("✗") || rest.to_lowercase().contains("fail") {
+                ("failed".to_string(), Some(rest.to_string()))
+            } else {
+                ("configured".to_string(), Some(rest.to_string()))
+            };
+            servers.push(McpServer {
+                name: name.trim().to_string(),
+                status,
+                details,
+            });
+        } else if !line.is_empty() {
+            servers.push(McpServer {
+                name: line.to_string(),
+                status: "configured".to_string(),
+                details: None,
+            });
+        }
+    }
+
+    Ok(servers)
 }
 
 pub async fn open_login_terminal() -> Result<()> {

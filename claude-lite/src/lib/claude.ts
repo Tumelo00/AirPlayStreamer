@@ -13,6 +13,16 @@ export async function checkClaudeCli(): Promise<CliStatus> {
   return invoke<CliStatus>("check_claude_cli");
 }
 
+export interface McpServer {
+  name: string;
+  status: "connected" | "failed" | "configured";
+  details: string | null;
+}
+
+export async function listMcpServers(): Promise<McpServer[]> {
+  return invoke<McpServer[]>("list_mcp_servers");
+}
+
 export async function openClaudeLogin(): Promise<void> {
   await invoke("open_claude_login");
 }

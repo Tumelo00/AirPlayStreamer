@@ -23,6 +23,11 @@ async fn check_claude_cli() -> claude::CliStatus {
 }
 
 #[tauri::command]
+async fn list_mcp_servers() -> Result<Vec<claude::McpServer>, String> {
+    claude::list_mcp_servers().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn open_claude_login() -> Result<(), String> {
     claude::open_login_terminal()
         .await
@@ -240,6 +245,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             check_claude_cli,
+            list_mcp_servers,
             open_claude_login,
             install_claude_cli,
             send_message_stream,
