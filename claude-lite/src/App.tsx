@@ -7,6 +7,7 @@ import { MessageList } from "./components/MessageList";
 import { Settings } from "./components/Settings";
 import { Sidebar } from "./components/Sidebar";
 import { checkClaudeCli } from "./lib/claude";
+import { appendMemory, formatMemoryEntry } from "./lib/memory";
 import { loadConversation, listConversations } from "./lib/storage";
 import {
   loadPreferences,
@@ -14,7 +15,7 @@ import {
   type Preferences,
 } from "./lib/preferences";
 import { useChat, newConversation, type PersistEvent } from "./hooks/useChat";
-import { MODELS, type Attachment, type Conversation } from "./lib/types";
+import { MODELS, type Attachment, type Conversation, type Message } from "./lib/types";
 
 const Terminal = lazy(() =>
   import("./components/Terminal").then((m) => ({ default: m.Terminal }))
@@ -214,7 +215,7 @@ function ModeTabs({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void 
         </button>
       ))}
       <div className="ml-auto text-[10px] text-zinc-600 self-center pr-2">
-        ⌘N · ⌘T · ⌘, · ⌘⇧Space
+        ⌘N · ⌘T · ⌘M · ⌘, · ⌘⇧Space
       </div>
     </div>
   );
@@ -242,11 +243,43 @@ function ChatPane({
     streaming,
     error,
     usage,
+    memoryMode,
+    toggleMemoryMode,
     sendMessage,
     stop,
     setModel,
     setSystemPrompt,
   } = useChat(initial, onPersisted);
+
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        toggleMemoryMode();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [toggleMemoryMode]);
+
+  const handlePin = useCallback(
+    async (m: Message) => {
+      const entry = formatMemoryEntry({
+        source: m.role === "user" ? "user" : "assistant",
+        conversationTitle: conversation.title,
+        content: m.content,
+      });
+      try {
+        await appendMemory(entry);
+        setPinnedIds((prev) => new Set(prev).add(m.id));
+      } catch (e) {
+        alert(`Hafıza ekleme hatası: ${e}`);
+      }
+    },
+    [conversation.title]
+  );
 
   return (
     <div className="flex flex-col flex-1 min-w-0">
@@ -258,11 +291,16 @@ function ChatPane({
         onOpenSettings={onOpenSettings}
         onNewChat={onNewChat}
         usage={usage}
+        memoryMode={memoryMode}
+        onToggleMemoryMode={toggleMemoryMode}
       />
       <MessageList
         messages={conversation.messages}
         streaming={streaming}
+        memoryMode={memoryMode}
+        pinnedIds={pinnedIds}
         onAttachmentClick={onPreview}
+        onPinMessage={handlePin}
       />
       {error && (
         <div className="px-4 py-2 text-sm text-red-400 bg-red-950/30 border-t border-red-900/50">

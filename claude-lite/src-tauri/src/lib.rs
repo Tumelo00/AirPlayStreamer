@@ -163,6 +163,11 @@ fn save_memory(state: State<'_, AppState>, content: String) -> Result<(), String
 }
 
 #[tauri::command]
+fn append_memory(state: State<'_, AppState>, entry: String) -> Result<(), String> {
+    memory::append(&state.data_dir, &entry).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn read_workspace_claude_md(state: State<'_, AppState>) -> Result<Option<String>, String> {
     let prefs = preferences::load(&state.data_dir).map_err(|e| e.to_string())?;
     let Some(ws) = prefs.workspace_dir else {
@@ -381,6 +386,7 @@ pub fn run() {
             save_preferences,
             load_memory,
             save_memory,
+            append_memory,
             read_workspace_claude_md,
             write_workspace_claude_md,
             pty_open,

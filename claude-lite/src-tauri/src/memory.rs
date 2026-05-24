@@ -27,6 +27,29 @@ pub fn save(dir: &Path, content: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn append(dir: &Path, entry: &str) -> Result<()> {
+    let existing = load(dir).unwrap_or_default();
+    let mut new_content = if existing.trim().is_empty() {
+        entry.trim_start().to_string()
+    } else {
+        format!("{}\n\n{}", existing.trim_end(), entry.trim_start())
+    };
+
+    while new_content.len() > MAX_BYTES {
+        if let Some(first_sep) = new_content.find("\n## ") {
+            if let Some(second_sep_rel) = new_content[first_sep + 4..].find("\n## ") {
+                new_content =
+                    new_content[first_sep + 4 + second_sep_rel + 1..].to_string();
+                continue;
+            }
+        }
+        new_content = new_content[new_content.len() - MAX_BYTES..].to_string();
+        break;
+    }
+
+    save(dir, &new_content)
+}
+
 pub fn merge_into_system_prompt(memory: &str, user_prompt: Option<&str>) -> Option<String> {
     let mem = memory.trim();
     let user = user_prompt.map(|s| s.trim()).filter(|s| !s.is_empty());

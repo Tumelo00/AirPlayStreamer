@@ -41,6 +41,7 @@ export function useChat(
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
+  const [memoryMode, setMemoryMode] = useState(false);
 
   const convRef = useRef(conversation);
   convRef.current = conversation;
@@ -170,11 +171,15 @@ export function useChat(
     });
   }, []);
 
+  const toggleMemoryMode = useCallback(() => setMemoryMode((v) => !v), []);
+
   return {
     conversation,
     streaming,
     error,
     usage,
+    memoryMode,
+    toggleMemoryMode,
     sendMessage,
     stop,
     setModel,

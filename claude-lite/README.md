@@ -102,8 +102,15 @@ Biz OAuth flow yapmıyoruz, Claude CLI'nin kendi auth'una güveniyoruz. Bu hem *
 - [x] Son konuşmayı geri yükle (açılışta)
 
 **Hafıza Sistemi:**
+- [x] **Hafıza Modu** (opt-in, per-sohbet, default KAPALI, persist edilmez):
+  - Header'da 🧠 toggle butonu — AÇIK iken sarı uyarı şeridi gösterir
+  - Her mesaj kartının altında 📌 buton — tıklayınca o mesajı
+    `memory.md`'ye sabitler (tarih + rol + sohbet başlığı ile)
+  - Yeni sohbet açınca veya app restart sonrası **otomatik KAPALI** —
+    yanlışlıkla açık kalmaz
+  - ⌘M klavye kısayolu
 - [x] Kullanıcı hafızası — `~/Library/Application Support/com.claudelite.app/memory.md`
-  her sohbete otomatik prepend; 32KB cap (Settings → Hafıza)
+  her sohbete otomatik prepend; 32KB cap, FIFO eviction (Settings → Hafıza)
 - [x] Workspace CLAUDE.md — workspace'teki notları oku/düzenle/kaydet
 - [x] Claude CLI cwd workspace'e set → CLAUDE.md zaten doğal olarak yüklenir
 - [x] Attachment preview'i DB'ye yazılmıyor (RAM/disk tasarrufu)

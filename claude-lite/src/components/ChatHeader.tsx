@@ -9,6 +9,8 @@ interface Props {
   onOpenSettings: () => void;
   onNewChat: () => void;
   usage?: UsageInfo | null;
+  memoryMode?: boolean;
+  onToggleMemoryMode?: () => void;
 }
 
 export function ChatHeader({
@@ -19,6 +21,8 @@ export function ChatHeader({
   onOpenSettings,
   onNewChat,
   usage,
+  memoryMode,
+  onToggleMemoryMode,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(systemPrompt ?? "");
@@ -64,6 +68,23 @@ export function ChatHeader({
           )}
         </div>
         <div className="flex items-center gap-1">
+          {onToggleMemoryMode && (
+            <button
+              onClick={onToggleMemoryMode}
+              className={`text-[10px] border rounded px-2 py-1 transition ${
+                memoryMode
+                  ? "border-amber-500 bg-amber-500/20 text-amber-300 font-medium"
+                  : "border-zinc-700 text-zinc-500 hover:text-zinc-300"
+              }`}
+              title={
+                memoryMode
+                  ? "Hafıza Modu AÇIK — mesaj yanındaki 📌 ile sabitleyebilirsin"
+                  : "Hafıza Modu kapalı"
+              }
+            >
+              {memoryMode ? "🧠 Hafıza AÇIK" : "🧠 Hafıza"}
+            </button>
+          )}
           <button
             onClick={onNewChat}
             className="text-xs text-zinc-400 hover:text-zinc-100 px-2 py-1 rounded hover:bg-zinc-800"
@@ -80,6 +101,16 @@ export function ChatHeader({
           </button>
         </div>
       </div>
+      {memoryMode && (
+        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-1.5 text-[11px] text-amber-200 flex items-center gap-2">
+          <span>🧠</span>
+          <span>
+            Hafıza Modu açık — mesaj kartlarındaki 📌 butonuyla sabitlersen
+            hafıza dosyasına eklenir ve sonraki tüm sohbetlerde Claude'a
+            verilir.
+          </span>
+        </div>
+      )}
       {editing && onSystemPromptChange && (
         <div className="border-b border-zinc-800 bg-zinc-900/30 px-4 py-2 space-y-1.5">
           <label className="text-[10px] text-zinc-500 uppercase tracking-wider">
