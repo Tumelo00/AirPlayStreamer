@@ -255,7 +255,7 @@ fn cleanup_pasted_images(app: &AppHandle) {
     let Some(cutoff) = cutoff else { return };
 
     let mut total_bytes: u64 = 0;
-    let mut entries: Vec<_> = std::fs::read_dir(&dir)
+    let mut entries: Vec<std::fs::DirEntry> = std::fs::read_dir(&dir)
         .ok()
         .map(|it| it.flatten().collect())
         .unwrap_or_default();
@@ -354,7 +354,7 @@ pub fn run() {
                 .tooltip("Claude Lite")
                 .menu(&menu)
                 .show_menu_on_left_click(true)
-                .on_menu_event(|app, event| match event.id().as_ref() {
+                .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => toggle_main_window(app),
                     "new" => {
                         if let Some(win) = app.get_webview_window("main") {

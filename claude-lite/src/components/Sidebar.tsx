@@ -33,7 +33,19 @@ export function Sidebar({ activeId, onSelect, onNew, refreshKey }: Props) {
   };
 
   useEffect(() => {
-    refresh();
+    let cancelled = false;
+    setLoading(true);
+    listConversations()
+      .then((list) => {
+        if (!cancelled) setItems(list);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [refreshKey]);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
