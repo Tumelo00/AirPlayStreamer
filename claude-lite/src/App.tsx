@@ -171,7 +171,10 @@ export default function App() {
                   </div>
                 }
               >
-                <Terminal cwd={prefs?.workspaceDir} />
+                <Terminal
+                  cwd={prefs?.workspaceDir}
+                  visible={mode === "terminal"}
+                />
               </Suspense>
             )}
           </div>

@@ -9,12 +9,14 @@ interface Props {
   initialCommand?: string;
   shell?: string;
   cwd?: string;
+  visible?: boolean;
 }
 
-export function Terminal({ initialCommand, shell, cwd }: Props) {
+export function Terminal({ initialCommand, shell, cwd, visible = true }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const ptyRef = useRef<PtyHandle | null>(null);
+  const fitRef = useRef<FitAddon | null>(null);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -48,8 +50,11 @@ export function Terminal({ initialCommand, shell, cwd }: Props) {
     term.loadAddon(fit);
     term.loadAddon(links);
     term.open(host);
-    fit.fit();
+    try {
+      fit.fit();
+    } catch {}
     xtermRef.current = term;
+    fitRef.current = fit;
 
     let disposed = false;
     let unData: (() => void) | null = null;
@@ -102,8 +107,25 @@ export function Terminal({ initialCommand, shell, cwd }: Props) {
       unExit?.();
       ptyRef.current?.close().catch(() => {});
       term.dispose();
+      fitRef.current = null;
     };
   }, [initialCommand, shell, cwd]);
+
+  useEffect(() => {
+    if (visible && fitRef.current) {
+      const timer = setTimeout(() => {
+        try {
+          fitRef.current?.fit();
+          if (xtermRef.current) {
+            ptyRef.current
+              ?.resize(xtermRef.current.cols, xtermRef.current.rows)
+              .catch(() => {});
+          }
+        } catch {}
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [visible]);
 
   return (
     <div className="flex-1 bg-[#09090b] overflow-hidden">

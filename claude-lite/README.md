@@ -92,7 +92,7 @@ Biz OAuth flow yapmıyoruz, Claude CLI'nin kendi auth'una güveniyoruz. Bu hem *
 - [x] Chat/Terminal tab switcher
 - [x] Mode geçişlerinde session korunur
 
-**Yapılandırma (v0.3):**
+**Yapılandırma:**
 - [x] MCP server listesi UI (Settings → MCP)
 - [x] Konuşma export (markdown, sidebar ↓ butonu)
 - [x] Custom system prompt UI (header'da · prompt butonu, per-sohbet)
@@ -101,10 +101,18 @@ Biz OAuth flow yapmıyoruz, Claude CLI'nin kendi auth'una güveniyoruz. Bu hem *
 - [x] Tema toggle (koyu/açık)
 - [x] Son konuşmayı geri yükle (açılışta)
 
+**Hafıza Sistemi:**
+- [x] Kullanıcı hafızası — `~/Library/Application Support/com.claudelite.app/memory.md`
+  her sohbete otomatik prepend; 32KB cap (Settings → Hafıza)
+- [x] Workspace CLAUDE.md — workspace'teki notları oku/düzenle/kaydet
+- [x] Claude CLI cwd workspace'e set → CLAUDE.md zaten doğal olarak yüklenir
+- [x] Attachment preview'i DB'ye yazılmıyor (RAM/disk tasarrufu)
+
 **Backlog:**
 - [ ] Çoklu terminal sekmeleri
 - [ ] Conversation pinning
 - [ ] Cmd+K hızlı arama
+- [ ] Conversation summarization (uzun sohbetler için)
 
 ## Hızlı Başlangıç
 

@@ -8,6 +8,7 @@ use tauri::{
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 mod claude;
+mod memory;
 mod preferences;
 mod storage;
 mod terminal;
@@ -49,13 +50,19 @@ async fn send_message_stream(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     channel: String,
-    payload: claude::ChatRequest,
+    mut payload: claude::ChatRequest,
 ) -> Result<(), String> {
     state.abort.store(false, Ordering::SeqCst);
     let abort = state.abort.clone();
-    let cwd = preferences::load(&state.data_dir)
-        .ok()
-        .and_then(|p| p.workspace_dir);
+    let prefs = preferences::load(&state.data_dir).ok();
+    let cwd = prefs.as_ref().and_then(|p| p.workspace_dir.clone());
+
+    let mem = memory::load(&state.data_dir).unwrap_or_default();
+    let merged = memory::merge_into_system_prompt(&mem, payload.system.as_deref());
+    if merged.is_some() {
+        payload.system = merged;
+    }
+
     let emit = move |evt: claude::StreamEvent| {
         let _ = app.emit(&channel, evt);
     };
@@ -146,6 +153,41 @@ fn save_preferences(
 }
 
 #[tauri::command]
+fn load_memory(state: State<'_, AppState>) -> Result<String, String> {
+    memory::load(&state.data_dir).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_memory(state: State<'_, AppState>, content: String) -> Result<(), String> {
+    memory::save(&state.data_dir, &content).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn read_workspace_claude_md(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    let prefs = preferences::load(&state.data_dir).map_err(|e| e.to_string())?;
+    let Some(ws) = prefs.workspace_dir else {
+        return Ok(None);
+    };
+    Ok(memory::read_workspace_claude_md(std::path::Path::new(&ws)))
+}
+
+#[tauri::command]
+fn write_workspace_claude_md(
+    state: State<'_, AppState>,
+    content: String,
+) -> Result<(), String> {
+    let prefs = preferences::load(&state.data_dir).map_err(|e| e.to_string())?;
+    let ws = prefs
+        .workspace_dir
+        .ok_or_else(|| "Çalışma dizini ayarlanmamış".to_string())?;
+    let path = std::path::Path::new(&ws).join("CLAUDE.md");
+    let tmp = std::path::Path::new(&ws).join("CLAUDE.md.tmp");
+    std::fs::write(&tmp, &content).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 async fn pty_open(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -204,11 +246,43 @@ fn cleanup_pasted_images(app: &AppHandle) {
         return;
     }
     let cutoff = std::time::SystemTime::now()
-        .checked_sub(std::time::Duration::from_secs(7 * 24 * 60 * 60));
+        .checked_sub(std::time::Duration::from_secs(30 * 24 * 60 * 60));
     let Some(cutoff) = cutoff else { return };
 
-    let Ok(entries) = std::fs::read_dir(&dir) else { return };
-    for entry in entries.flatten() {
+    let mut total_bytes: u64 = 0;
+    let mut entries: Vec<_> = std::fs::read_dir(&dir)
+        .ok()
+        .map(|it| it.flatten().collect())
+        .unwrap_or_default();
+
+    for entry in &entries {
+        if let Ok(meta) = entry.metadata() {
+            total_bytes = total_bytes.saturating_add(meta.len());
+        }
+    }
+
+    const MAX_BYTES: u64 = 500 * 1024 * 1024;
+
+    if total_bytes > MAX_BYTES {
+        entries.sort_by_key(|e| {
+            e.metadata().and_then(|m| m.modified()).ok()
+        });
+        let mut remaining = total_bytes;
+        for entry in &entries {
+            if remaining <= MAX_BYTES / 2 {
+                break;
+            }
+            if let Ok(meta) = entry.metadata() {
+                let size = meta.len();
+                if std::fs::remove_file(entry.path()).is_ok() {
+                    remaining = remaining.saturating_sub(size);
+                }
+            }
+        }
+        return;
+    }
+
+    for entry in entries {
         if let Ok(meta) = entry.metadata() {
             if let Ok(modified) = meta.modified() {
                 if modified < cutoff {
@@ -305,6 +379,10 @@ pub fn run() {
             delete_conversation,
             load_preferences,
             save_preferences,
+            load_memory,
+            save_memory,
+            read_workspace_claude_md,
+            write_workspace_claude_md,
             pty_open,
             pty_write,
             pty_resize,

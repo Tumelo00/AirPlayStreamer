@@ -10,6 +10,7 @@ import {
 } from "@/lib/claude";
 import type { Preferences } from "@/lib/preferences";
 import { MODELS } from "@/lib/types";
+import { MemoryPanel } from "./MemoryPanel";
 
 interface Props {
   prefs: Preferences;
@@ -17,7 +18,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = "connection" | "general" | "mcp";
+type Tab = "connection" | "general" | "memory" | "mcp";
 
 export function Settings({ prefs, onPrefsChange, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("connection");
@@ -127,6 +128,7 @@ export function Settings({ prefs, onPrefsChange, onClose }: Props) {
             [
               ["connection", "Bağlantı"],
               ["general", "Genel"],
+              ["memory", "Hafıza"],
               ["mcp", "MCP"],
             ] as const
           ).map(([id, label]) => (
@@ -165,6 +167,8 @@ export function Settings({ prefs, onPrefsChange, onClose }: Props) {
               onPickWorkspace={pickWorkspaceDir}
             />
           )}
+
+          {tab === "memory" && <MemoryPanel workspaceDir={prefs.workspaceDir} />}
 
           {tab === "mcp" && (
             <McpTab

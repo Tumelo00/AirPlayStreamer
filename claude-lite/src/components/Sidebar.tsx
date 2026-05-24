@@ -60,6 +60,7 @@ export function Sidebar({ activeId, onSelect, onNew, refreshKey }: Props) {
   };
 
   const commitEdit = async (c: Conversation) => {
+    if (editingId !== c.id) return;
     const newTitle = editText.trim() || c.title;
     setEditingId(null);
     if (newTitle === c.title) return;

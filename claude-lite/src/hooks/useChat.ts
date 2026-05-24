@@ -9,6 +9,20 @@ import type {
   UsageInfo,
 } from "@/lib/types";
 
+function stripPreviewsForStorage(c: Conversation): Conversation {
+  return {
+    ...c,
+    messages: c.messages.map((m) =>
+      m.attachments
+        ? {
+            ...m,
+            attachments: m.attachments.map((a) => ({ ...a, preview: undefined })),
+          }
+        : m
+    ),
+  };
+}
+
 const newId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -123,7 +137,7 @@ export function useChat(
             const isNew = firstSaveRef.current;
             const titleChanged = newTitle !== oldTitle;
             firstSaveRef.current = false;
-            saveConversation(finalConv)
+            saveConversation(stripPreviewsForStorage(finalConv))
               .then(() => onPersisted?.({ isNew, titleChanged }))
               .catch(() => {});
           }
@@ -143,10 +157,17 @@ export function useChat(
   }, []);
 
   const setSystemPrompt = useCallback((systemPrompt: string) => {
-    setConversation((c) => ({
-      ...c,
-      systemPrompt: systemPrompt.trim() ? systemPrompt : undefined,
-    }));
+    setConversation((c) => {
+      const next: Conversation = {
+        ...c,
+        systemPrompt: systemPrompt.trim() ? systemPrompt : undefined,
+        updatedAt: Date.now(),
+      };
+      if (c.messages.length > 0) {
+        saveConversation(stripPreviewsForStorage(next)).catch(() => {});
+      }
+      return next;
+    });
   }, []);
 
   return {
