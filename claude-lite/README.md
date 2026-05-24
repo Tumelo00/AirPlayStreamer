@@ -52,7 +52,7 @@ Biz OAuth flow yapmıyoruz, Claude CLI'nin kendi auth'una güveniyoruz. Bu hem *
 - **rusqlite** — lokal konuşma geçmişi
 - **tokio** — async subprocess + I/O
 
-## Özellikler (MVP)
+## Özellikler
 
 - [x] Tauri 2 + React iskeleti
 - [x] Claude CLI subprocess wrapper (streaming JSON)
@@ -64,11 +64,13 @@ Biz OAuth flow yapmıyoruz, Claude CLI'nin kendi auth'una güveniyoruz. Bu hem *
 - [x] Markdown render + kod syntax highlight
 - [x] SQLite ile lokal konuşma geçmişi
 - [x] Conversation continuity (`--session-id`)
-- [ ] Dosya önizleme paneli (PDF, kod, görsel)
-- [ ] Konuşma geçmişi sidebar UI'si
-- [ ] Sistem tray + Cmd+Shift+Space global hotkey
-- [ ] Terminal modu (xterm.js + pty wrapper)
-- [ ] MCP server desteği
+- [x] Konuşma geçmişi sidebar UI'si
+- [x] Dosya önizleme paneli (görsel + kod + PDF iframe)
+- [x] Sistem tray (Göster/Gizle/Yeni/Çıkış menüsü)
+- [x] Cmd+Shift+Space global hotkey (pencereyi toggle)
+- [x] Terminal modu (xterm.js + portable-pty wrapper)
+- [ ] MCP server listesi UI (Claude CLI zaten destekliyor)
+- [ ] Konuşma export (md/json)
 
 ## Hızlı Başlangıç
 

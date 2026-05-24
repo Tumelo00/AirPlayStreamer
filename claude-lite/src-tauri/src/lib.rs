@@ -1,11 +1,18 @@
 use std::sync::Mutex;
-use tauri::{Emitter, Manager, State};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::TrayIconBuilder,
+    AppHandle, Emitter, Manager, State,
+};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 mod claude;
 mod storage;
+mod terminal;
 
 pub struct AppState {
     pub db: Mutex<storage::Db>,
+    pub pty: terminal::PtyManager,
 }
 
 #[tauri::command]
@@ -77,6 +84,56 @@ fn delete_conversation(state: State<'_, AppState>, id: String) -> Result<(), Str
     db.delete(&id).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn pty_open(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    cols: u16,
+    rows: u16,
+    shell: Option<String>,
+    cwd: Option<String>,
+) -> Result<(), String> {
+    state
+        .pty
+        .open(app, id, cols, rows, shell, cwd)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn pty_write(state: State<'_, AppState>, id: String, data: String) -> Result<(), String> {
+    state.pty.write(&id, &data).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn pty_resize(
+    state: State<'_, AppState>,
+    id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<(), String> {
+    state.pty.resize(&id, cols, rows).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn pty_close(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    state.pty.close(&id).map_err(|e| e.to_string())
+}
+
+fn toggle_main_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        match win.is_visible() {
+            Ok(true) => {
+                let _ = win.hide();
+            }
+            _ => {
+                let _ = win.show();
+                let _ = win.set_focus();
+            }
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt()
@@ -87,6 +144,17 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    if event.state == ShortcutState::Pressed
+                        && shortcut.matches(Modifiers::SUPER | Modifiers::SHIFT, Code::Space)
+                    {
+                        toggle_main_window(app);
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
             let data_dir = app
                 .path()
@@ -97,7 +165,37 @@ pub fn run() {
             let db = storage::Db::open(&db_path)?;
             app.manage(AppState {
                 db: Mutex::new(db),
+                pty: terminal::PtyManager::new(),
             });
+
+            let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::Space);
+            if let Err(e) = app.global_shortcut().register(shortcut) {
+                tracing::warn!("Global shortcut kaydedilemedi: {}", e);
+            }
+
+            let show_item = MenuItem::with_id(app, "show", "Göster / Gizle", true, None::<&str>)?;
+            let new_item = MenuItem::with_id(app, "new", "Yeni Sohbet", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Çıkış", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &new_item, &quit_item])?;
+
+            let _tray = TrayIconBuilder::with_id("main-tray")
+                .tooltip("Claude Lite")
+                .menu(&menu)
+                .show_menu_on_left_click(true)
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "show" => toggle_main_window(app),
+                    "new" => {
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                            let _ = app.emit("menu:new-chat", ());
+                        }
+                    }
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .build(app)?;
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -110,6 +208,10 @@ pub fn run() {
             load_conversation,
             save_conversation,
             delete_conversation,
+            pty_open,
+            pty_write,
+            pty_resize,
+            pty_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

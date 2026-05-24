@@ -10,7 +10,7 @@ import type {
 
 const newId = () => crypto.randomUUID();
 
-export function useChat(initial: Conversation) {
+export function useChat(initial: Conversation, onPersisted?: () => void) {
   const [conversation, setConversation] = useState<Conversation>(initial);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,18 +72,25 @@ export function useChat(initial: Conversation) {
         setError(String(err));
       } finally {
         setStreaming(false);
+        const title =
+          conversation.title === "Yeni sohbet" && text.trim()
+            ? text.trim().slice(0, 60)
+            : conversation.title;
         const finalConv: Conversation = {
           ...next,
+          title,
           sessionId: resolvedSessionId,
           messages: next.messages.map((m) =>
             m.id === assistantMsg.id ? { ...m, content: buffer } : m
           ),
         };
         setConversation(finalConv);
-        saveConversation(finalConv).catch(() => {});
+        saveConversation(finalConv)
+          .then(() => onPersisted?.())
+          .catch(() => {});
       }
     },
-    [conversation]
+    [conversation, onPersisted]
   );
 
   const setModel = useCallback((model: string) => {
