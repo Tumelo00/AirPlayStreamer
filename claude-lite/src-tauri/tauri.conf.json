@@ -1,0 +1,71 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Claude Lite",
+  "version": "0.1.0",
+  "identifier": "com.claudelite.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Claude Lite",
+        "width": 980,
+        "height": 720,
+        "minWidth": 600,
+        "minHeight": 480,
+        "dragDropEnabled": true,
+        "decorations": true,
+        "transparent": false,
+        "titleBarStyle": "Visible"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' data: blob: asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost; frame-src 'self' asset: http://asset.localhost",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
+    },
+    "macOSPrivateApi": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "app"],
+    "category": "DeveloperTool",
+    "shortDescription": "Hafif Claude masaüstü istemcisi",
+    "longDescription": "Claude Lite — Tauri 2 tabanlı, Claude Desktop'tan ~5x daha az RAM kullanan hafif istemci. Claude CLI üzerinden Pro/Max aboneliğinle çalışır (API key gerekmez).",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "11.0",
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "entitlements": null,
+      "dmg": {
+        "background": null,
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 170
+        }
+      }
+    }
+  }
+}

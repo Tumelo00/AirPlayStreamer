@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: rgb(9 9 11);
+    color: rgb(228 228 231);
+  }
+}
+
+@layer components {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgb(63 63 70 / 0.5);
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgb(82 82 91 / 0.7);
+  }
+}
+
+.markdown-body p {
+  margin: 0.5em 0;
+}
+.markdown-body pre {
+  background: rgb(24 24 27);
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+.markdown-body code:not(pre code) {
+  background: rgb(39 39 42);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+.markdown-body a {
+  color: rgb(96 165 250);
+  text-decoration: underline;
+}
+
+/* Light theme overrides */
+.theme-light {
+  color: rgb(24 24 27);
+}
+.theme-light .bg-zinc-950\/60,
+.theme-light .bg-zinc-950\/40,
+.theme-light .bg-zinc-950,
+.theme-light .bg-zinc-900\/40,
+.theme-light .bg-zinc-900\/30,
+.theme-light .bg-zinc-900\/50 {
+  background-color: rgb(244 244 245);
+}
+.theme-light .bg-zinc-900,
+.theme-light .bg-zinc-900\/60 {
+  background-color: rgb(250 250 250);
+}
+.theme-light .bg-zinc-800,
+.theme-light .bg-zinc-800\/80,
+.theme-light .bg-zinc-800\/70,
+.theme-light .bg-zinc-800\/60,
+.theme-light .bg-zinc-800\/40,
+.theme-light .bg-zinc-800\/50 {
+  background-color: rgb(228 228 231);
+}
+.theme-light .text-zinc-100,
+.theme-light .text-zinc-200 {
+  color: rgb(24 24 27);
+}
+.theme-light .text-zinc-300 {
+  color: rgb(39 39 42);
+}
+.theme-light .text-zinc-400 {
+  color: rgb(63 63 70);
+}
+.theme-light .text-zinc-500 {
+  color: rgb(82 82 91);
+}
+.theme-light .text-zinc-600 {
+  color: rgb(113 113 122);
+}
+.theme-light .border-zinc-800,
+.theme-light .border-zinc-800\/60,
+.theme-light .border-zinc-800\/50,
+.theme-light .border-zinc-800\/40,
+.theme-light .border-zinc-700 {
+  border-color: rgb(228 228 231);
+}
+.theme-light .markdown-body pre {
+  background: rgb(244 244 245);
+  color: rgb(24 24 27);
+}
+.theme-light .markdown-body code:not(pre code) {
+  background: rgb(228 228 231);
+  color: rgb(24 24 27);
+}

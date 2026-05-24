@@ -1,0 +1,47 @@
+import { PrismLight } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+
+import bash from "react-syntax-highlighter/dist/esm/languages/prism/bash";
+import css from "react-syntax-highlighter/dist/esm/languages/prism/css";
+import go from "react-syntax-highlighter/dist/esm/languages/prism/go";
+import java from "react-syntax-highlighter/dist/esm/languages/prism/java";
+import javascript from "react-syntax-highlighter/dist/esm/languages/prism/javascript";
+import json from "react-syntax-highlighter/dist/esm/languages/prism/json";
+import jsx from "react-syntax-highlighter/dist/esm/languages/prism/jsx";
+import markdown from "react-syntax-highlighter/dist/esm/languages/prism/markdown";
+import python from "react-syntax-highlighter/dist/esm/languages/prism/python";
+import rust from "react-syntax-highlighter/dist/esm/languages/prism/rust";
+import sql from "react-syntax-highlighter/dist/esm/languages/prism/sql";
+import swift from "react-syntax-highlighter/dist/esm/languages/prism/swift";
+import toml from "react-syntax-highlighter/dist/esm/languages/prism/toml";
+import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
+import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
+import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
+
+PrismLight.registerLanguage("bash", bash);
+PrismLight.registerLanguage("sh", bash);
+PrismLight.registerLanguage("shell", bash);
+PrismLight.registerLanguage("zsh", bash);
+PrismLight.registerLanguage("css", css);
+PrismLight.registerLanguage("go", go);
+PrismLight.registerLanguage("java", java);
+PrismLight.registerLanguage("javascript", javascript);
+PrismLight.registerLanguage("js", javascript);
+PrismLight.registerLanguage("json", json);
+PrismLight.registerLanguage("jsx", jsx);
+PrismLight.registerLanguage("markdown", markdown);
+PrismLight.registerLanguage("md", markdown);
+PrismLight.registerLanguage("python", python);
+PrismLight.registerLanguage("py", python);
+PrismLight.registerLanguage("rust", rust);
+PrismLight.registerLanguage("rs", rust);
+PrismLight.registerLanguage("sql", sql);
+PrismLight.registerLanguage("swift", swift);
+PrismLight.registerLanguage("toml", toml);
+PrismLight.registerLanguage("tsx", tsx);
+PrismLight.registerLanguage("ts", typescript);
+PrismLight.registerLanguage("typescript", typescript);
+PrismLight.registerLanguage("yaml", yaml);
+PrismLight.registerLanguage("yml", yaml);
+
+export { PrismLight as SyntaxHighlighter, oneDark };
