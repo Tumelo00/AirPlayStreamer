@@ -37,6 +37,7 @@
     "targets": ["dmg", "app"],
     "category": "DeveloperTool",
     "shortDescription": "Hafif Claude masaüstü istemcisi",
+    "longDescription": "Claude Lite — Tauri 2 tabanlı, Claude Desktop'tan ~5x daha az RAM kullanan hafif istemci. Claude CLI üzerinden Pro/Max aboneliğinle çalışır (API key gerekmez).",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -45,7 +46,26 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "minimumSystemVersion": "11.0"
+      "minimumSystemVersion": "11.0",
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "entitlements": null,
+      "dmg": {
+        "background": null,
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 170
+        }
+      }
     }
   }
 }

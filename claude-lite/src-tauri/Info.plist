@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Claude Lite, hesabınla giriş yapabilmen için Terminal uygulamasını açıp `claude` komutunu otomatik çalıştırmak ister.</string>
+
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Claude Lite, sürükle-bırak ile eklediğin dosyaları okumak için izin ister.</string>
+
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Claude Lite, sürükle-bırak ile eklediğin dosyaları okumak için izin ister.</string>
+
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Claude Lite, sürükle-bırak ile eklediğin dosyaları okumak için izin ister.</string>
+
+    <key>LSMinimumSystemVersion</key>
+    <string>11.0</string>
+
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.developer-tools</string>
+
+    <key>NSHighResolutionCapable</key>
+    <true/>
+
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+
+    <key>CFBundleDocumentTypes</key>
+    <array/>
+
+    <key>NSHumanReadableCopyright</key>
+    <string>Claude Lite — MIT</string>
+</dict>
+</plist>

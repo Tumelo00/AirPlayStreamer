@@ -123,18 +123,49 @@ Biz OAuth flow yapmıyoruz, Claude CLI'nin kendi auth'una güveniyoruz. Bu hem *
 
 ## Kurulum (Son Kullanıcı)
 
-İki seçenek var:
-
 ### A) Hazır .DMG indir (önerilen)
 
 1. GitHub Actions sayfasına git → **Build Claude Lite (macOS)** workflow → en son başarılı run
-2. Sayfanın altındaki **Artifacts** bölümünden `claude-lite-aarch64-apple-darwin-dmg` indir (Apple Silicon Mac için; Intel Mac için x86_64 build manuel tetiklenmeli)
+2. Sayfanın altındaki **Artifacts** bölümünden `.dmg` indir:
+   - **Apple Silicon (M1/M2/M3/M4, Tahoe dahil tüm yeni Mac'ler)**: `claude-lite-aarch64-apple-darwin-dmg`
+   - **Intel Mac (eski, Sequoia ve öncesi)**: manuel `workflow_dispatch` ile `x86_64-apple-darwin` tetikle
 3. ZIP'i aç → içindeki `.dmg`'ye çift tıkla
 4. Açılan pencerede **Claude Lite** ikonunu **Applications** klasörüne sürükle
-5. İlk açışta macOS imzasız uygulamayı engeller → Applications'tan **sağ tık → Aç → tekrar Aç**
-6. Uygulama açıldığında otomatik olarak Claude CLI kurulumunu önerir (tek tıkla); sonra Claude hesabınla giriş yap
+5. **Applications'tan uygulamayı çift tıkla** → ilk açılış engellenir (imzasız)
 
-> **Release** olarak çıkarmak için: `git tag claude-lite-v0.1.0 && git push --tags` — workflow otomatik GitHub Release oluşturur, kalıcı indirme linki olur.
+### macOS Tahoe (26) / Sequoia (15) için ilk açılış
+
+Apple, Tahoe ile birlikte **"sağ tık → Aç" yöntemini kaldırdı**. Yeni akış:
+
+1. Uygulamayı normal şekilde **çift tıkla** → "Apple bu uygulamayı doğrulayamıyor" hatası alırsın → **Bitti** de
+2. **System Settings** aç → **Privacy & Security**
+3. En alta scroll et → "Claude Lite engellendi çünkü ..." mesajını gör → yanındaki **"Open Anyway"** (Yine de Aç) butonuna bas
+4. Admin şifreni gir
+5. Çıkan dialog'da **Open Anyway** de
+6. Bu noktadan sonra uygulama her zaman açılır
+
+> Bu engeli kalıcı çözmek için Apple Developer hesabı + code signing/notarization gerek ($99/yıl). Şu an unsigned dağıtıyoruz; ev kullanımı için yeterli.
+
+### macOS Big Sur (11) → Sonoma (14) için
+
+1. Applications'ta uygulamayı bul → **sağ tık → Aç** → çıkan diyalogda yine **Aç**
+2. Eski yöntem hala çalışır (Sequoia/Tahoe'de değil)
+
+### Açıldıktan sonra
+
+İlk açılışta uygulama bir Ayarlar penceresi açar:
+- **Claude CLI yoksa** → "Otomatik Kur" butonu (`curl install.sh` arka planda çalışır, ~100MB native binary indirir)
+- **CLI var ama login değilsen** → "Terminal'de Login Aç" → Terminal açılır + `claude` çalıştırılır + browser'da Claude.ai hesabınla onayla
+  - **İlk seferde**: macOS "Claude Lite, Terminal'i kontrol etmek istiyor" der → **OK** de (Info.plist'te `NSAppleEventsUsageDescription` ile açıklandı)
+- Her şey hazır → kapat, chat'e başla
+
+### Release (kalıcı download link) olarak yayınla
+
+```bash
+git tag claude-lite-v0.1.0
+git push --tags
+```
+CI workflow tag'i görünce **GitHub Release** oluşturur — herkes link üzerinden indirebilir.
 
 ### B) Kendin derle (geliştirici)
 

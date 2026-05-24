@@ -86,11 +86,34 @@ jobs:
       - name: Build app (${{ env.TARGET }})
         run: npx --yes @tauri-apps/cli build --target "$TARGET"
 
+      - name: Ad-hoc code sign (Tahoe damaged-app fix)
+        run: |
+          set -e
+          BUNDLE_DIR="src-tauri/target/$TARGET/release/bundle"
+          for app in "$BUNDLE_DIR/macos"/*.app; do
+            if [ -d "$app" ]; then
+              echo "Ad-hoc imzalama: $app"
+              codesign --force --deep --sign - "$app"
+              codesign --verify --verbose=2 "$app" || true
+            fi
+          done
+          # DMG'yi yeniden imzalamaya gerek yok; içindeki .app imzalı
+          # Quarantine attribute'unu bundle içinden temizle (build runner local)
+          for dmg in "$BUNDLE_DIR/dmg"/*.dmg; do
+            if [ -f "$dmg" ]; then
+              xattr -cr "$dmg" 2>/dev/null || true
+            fi
+          done
+
       - name: List build artifacts
         if: always()
         run: |
           echo "=== Bundle dizini ==="
           find src-tauri/target -name "*.dmg" -o -name "*.app" 2>/dev/null | head -20 || true
+          echo "=== Codesign durumu ==="
+          for app in src-tauri/target/$TARGET/release/bundle/macos/*.app; do
+            [ -d "$app" ] && codesign -dvv "$app" 2>&1 | head -20 || true
+          done
 
       - name: Upload .dmg artifact
         uses: actions/upload-artifact@v4
@@ -125,9 +148,23 @@ jobs:
 
             1. Aşağıdan `.dmg` dosyasını indir
             2. Çift tıkla, açılan pencerede **Claude Lite**'ı **Applications** klasörüne sürükle
-            3. İlk açışta macOS imzasız uygulamayı engeller — Applications'tan **sağ tık → Aç** → tekrar **Aç**
-            4. Uygulama açılınca otomatik olarak `claude` CLI kurulumunu önerir (tek tıkla); sonra Claude.ai hesabınla giriş
+            3. Applications'tan uygulamayı **çift tıkla** → ilk açışta engellenir (imzasız)
 
-            > İmzalanmış (notarize) sürüm için Apple Developer hesabı gerek ($99/yıl). Şimdilik unsigned dağıtım yapıyoruz; ev kullanımı için sorun değil.
+            ### macOS Tahoe (26) / Sequoia (15):
+
+            Apple "sağ tık → Aç"ı kaldırdı. Yeni akış:
+            - **System Settings → Privacy & Security** → en alta scroll
+            - "Claude Lite engellendi" yanındaki **Open Anyway** butonuna bas
+            - Admin şifresini gir → açılan dialog'da tekrar **Open Anyway**
+
+            ### macOS Big Sur (11) → Sonoma (14):
+
+            - Applications'ta **sağ tık → Aç → Aç** (eski yöntem)
+
+            ### Açıldıktan sonra
+
+            Otomatik olarak `claude` CLI kurulumunu önerir (tek tıkla); sonra Claude.ai hesabınla giriş yap. API key gerekmez — Pro/Max aboneliğinle çalışır.
+
+            > İmzalanmış (notarize) sürüm için Apple Developer hesabı gerek ($99/yıl). Şu an unsigned dağıtım yapıyoruz; ev kullanımı için sorun değil.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
