@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { ChatHeader } from "./components/ChatHeader";
 import { FilePreview } from "./components/FilePreview";
@@ -6,10 +6,13 @@ import { MessageInput } from "./components/MessageInput";
 import { MessageList } from "./components/MessageList";
 import { Settings } from "./components/Settings";
 import { Sidebar } from "./components/Sidebar";
-import { Terminal } from "./components/Terminal";
 import { checkClaudeCli } from "./lib/claude";
 import { useChat, newConversation } from "./hooks/useChat";
 import { MODELS, type Attachment, type Conversation } from "./lib/types";
+
+const Terminal = lazy(() =>
+  import("./components/Terminal").then((m) => ({ default: m.Terminal }))
+);
 
 type Mode = "chat" | "terminal";
 
@@ -19,11 +22,16 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [preview, setPreview] = useState<Attachment | null>(null);
   const [mode, setMode] = useState<Mode>("chat");
+  const [terminalMounted, setTerminalMounted] = useState(false);
 
   const [initial, setInitial] = useState<Conversation>(() =>
     newConversation(MODELS[1].id)
   );
   const [chatKey, setChatKey] = useState(0);
+
+  useEffect(() => {
+    if (mode === "terminal") setTerminalMounted(true);
+  }, [mode]);
 
   const verifyCli = useCallback(async () => {
     const s = await checkClaudeCli();
@@ -50,6 +58,25 @@ export default function App() {
     };
   }, [handleNewChat]);
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        handleNewChat();
+      } else if (e.key === ",") {
+        e.preventDefault();
+        setShowSettings(true);
+      } else if (e.key === "t" || e.key === "T") {
+        e.preventDefault();
+        setMode((m) => (m === "chat" ? "terminal" : "chat"));
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [handleNewChat]);
+
   const handleSelect = (c: Conversation) => {
     setInitial(c);
     setChatKey((n) => n + 1);
@@ -70,7 +97,10 @@ export default function App() {
       <div className="flex-1 flex min-w-0">
         <div className="flex-1 flex flex-col min-w-0">
           <ModeTabs mode={mode} onChange={setMode} />
-          {mode === "chat" ? (
+          <div
+            className="flex-1 flex flex-col min-h-0"
+            style={{ display: mode === "chat" ? "flex" : "none" }}
+          >
             <ChatPane
               key={chatKey}
               initial={initial}
@@ -80,9 +110,23 @@ export default function App() {
               onPersisted={handlePersisted}
               onPreview={setPreview}
             />
-          ) : (
-            <Terminal />
-          )}
+          </div>
+          <div
+            className="flex-1 flex flex-col min-h-0"
+            style={{ display: mode === "terminal" ? "flex" : "none" }}
+          >
+            {terminalMounted && (
+              <Suspense
+                fallback={
+                  <div className="flex-1 flex items-center justify-center text-zinc-500 text-sm">
+                    Terminal yükleniyor…
+                  </div>
+                }
+              >
+                <Terminal />
+              </Suspense>
+            )}
+          </div>
         </div>
         {mode === "chat" && (
           <FilePreview attachment={preview} onClose={() => setPreview(null)} />
@@ -116,6 +160,9 @@ function ModeTabs({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void 
           {m === "chat" ? "Sohbet" : "Terminal"}
         </button>
       ))}
+      <div className="ml-auto text-[10px] text-zinc-600 self-center pr-2">
+        ⌘N yeni · ⌘T terminal · ⌘, ayarlar · ⌘⇧Space toggle
+      </div>
     </div>
   );
 }
@@ -137,10 +184,8 @@ function ChatPane({
   onPersisted,
   onPreview,
 }: ChatPaneProps) {
-  const { conversation, streaming, error, sendMessage, setModel } = useChat(
-    initial,
-    onPersisted
-  );
+  const { conversation, streaming, error, usage, sendMessage, stop, setModel } =
+    useChat(initial, onPersisted);
 
   return (
     <div className="flex flex-col flex-1 min-w-0">
@@ -149,6 +194,7 @@ function ChatPane({
         onModelChange={setModel}
         onOpenSettings={onOpenSettings}
         onNewChat={onNewChat}
+        usage={usage}
       />
       <MessageList
         messages={conversation.messages}
@@ -160,7 +206,12 @@ function ChatPane({
           {error}
         </div>
       )}
-      <MessageInput onSend={sendMessage} disabled={streaming || needsLogin} />
+      <MessageInput
+        onSend={sendMessage}
+        onStop={stop}
+        streaming={streaming}
+        disabled={needsLogin}
+      />
     </div>
   );
 }

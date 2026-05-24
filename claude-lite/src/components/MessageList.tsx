@@ -1,3 +1,4 @@
+import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -11,8 +12,32 @@ interface Props {
 }
 
 export function MessageList({ messages, streaming, onAttachmentClick }: Props) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stickyRef = useRef(true);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      stickyRef.current = distance < 80;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el && stickyRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages, streaming]);
+
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-thin px-6 py-4 space-y-4">
+    <div
+      ref={scrollRef}
+      className="flex-1 overflow-y-auto scrollbar-thin px-6 py-4 space-y-4"
+    >
       {messages.length === 0 && (
         <div className="text-center text-zinc-500 mt-20">
           <p className="text-sm">Bir mesaj yazarak başla.</p>
@@ -35,67 +60,75 @@ export function MessageList({ messages, streaming, onAttachmentClick }: Props) {
   );
 }
 
-function MessageBubble({
-  message,
-  onAttachmentClick,
-}: {
-  message: Message;
-  onAttachmentClick?: (a: Attachment) => void;
-}) {
-  const isUser = message.role === "user";
-  return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[80%] rounded-lg px-4 py-2.5 ${
-          isUser
-            ? "bg-blue-600 text-white"
-            : "bg-zinc-800/80 text-zinc-100"
-        }`}
-      >
-        {message.attachments && message.attachments.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {message.attachments.map((a, i) => (
-              <AttachmentChip
-                key={i}
-                attachment={a}
-                onClick={() => onAttachmentClick?.(a)}
-              />
-            ))}
-          </div>
-        )}
-        <div className="markdown-body text-sm leading-relaxed">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              code({ inline, className, children, ...props }: any) {
-                const match = /language-(\w+)/.exec(className || "");
-                if (!inline && match) {
+const MessageBubble = memo(
+  function MessageBubble({
+    message,
+    onAttachmentClick,
+  }: {
+    message: Message;
+    onAttachmentClick?: (a: Attachment) => void;
+  }) {
+    const isUser = message.role === "user";
+    return (
+      <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+        <div
+          className={`max-w-[80%] rounded-lg px-4 py-2.5 ${
+            isUser ? "bg-blue-600 text-white" : "bg-zinc-800/80 text-zinc-100"
+          }`}
+        >
+          {message.attachments && message.attachments.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {message.attachments.map((a, i) => (
+                <AttachmentChip
+                  key={i}
+                  attachment={a}
+                  onClick={() => onAttachmentClick?.(a)}
+                />
+              ))}
+            </div>
+          )}
+          <div className="markdown-body text-sm leading-relaxed">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                code({ className, children, ...props }) {
+                  const match = /language-(\w+)/.exec(className || "");
+                  if (match) {
+                    return (
+                      <SyntaxHighlighter
+                        language={match[1]}
+                        style={oneDark as any}
+                        PreTag="div"
+                        customStyle={{
+                          margin: 0,
+                          borderRadius: 6,
+                          fontSize: 12,
+                        }}
+                      >
+                        {String(children).replace(/\n$/, "")}
+                      </SyntaxHighlighter>
+                    );
+                  }
                   return (
-                    <SyntaxHighlighter
-                      language={match[1]}
-                      style={oneDark as any}
-                      PreTag="div"
-                      customStyle={{ margin: 0, borderRadius: 6 }}
-                    >
-                      {String(children).replace(/\n$/, "")}
-                    </SyntaxHighlighter>
+                    <code className={className} {...props}>
+                      {children}
+                    </code>
                   );
-                }
-                return (
-                  <code className={className} {...props}>
-                    {children}
-                  </code>
-                );
-              },
-            }}
-          >
-            {message.content || (isUser ? "" : "…")}
-          </ReactMarkdown>
+                },
+              }}
+            >
+              {message.content || (isUser ? "" : "…")}
+            </ReactMarkdown>
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  },
+  (prev, next) =>
+    prev.message.id === next.message.id &&
+    prev.message.content === next.message.content &&
+    prev.message.attachments === next.message.attachments
+);
 
 function AttachmentChip({
   attachment,
@@ -119,7 +152,7 @@ function AttachmentChip({
       onClick={onClick}
       className="text-xs bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1 hover:bg-zinc-800 hover:border-zinc-600"
     >
-      📎 {attachment.name}
+      {attachment.name}
     </button>
   );
 }

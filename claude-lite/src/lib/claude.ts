@@ -92,3 +92,17 @@ function buildContent(m: Message) {
 export async function readFileAsAttachment(path: string): Promise<Attachment> {
   return invoke<Attachment>("read_file_as_attachment", { path });
 }
+
+export async function abortStream(): Promise<void> {
+  await invoke("abort_stream");
+}
+
+export async function savePastedImage(
+  bytes: Uint8Array,
+  mime: string
+): Promise<Attachment> {
+  return invoke<Attachment>("save_pasted_image", {
+    bytes: Array.from(bytes),
+    mime,
+  });
+}

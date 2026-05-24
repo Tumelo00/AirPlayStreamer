@@ -1,3 +1,4 @@
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { Attachment } from "@/lib/types";
@@ -48,7 +49,7 @@ function PreviewBody({ attachment }: { attachment: Attachment }) {
   if (attachment.kind === "pdf") {
     return (
       <iframe
-        src={`file://${attachment.path}`}
+        src={convertFileSrc(attachment.path)}
         title={attachment.name}
         className="w-full h-full min-h-[500px] bg-white rounded"
       />

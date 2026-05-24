@@ -4,13 +4,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::Path;
 use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::process::Command;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ChatRequest {
     pub model: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system: Option<String>,
     #[serde(default)]
     pub max_tokens: u32,
@@ -35,7 +37,7 @@ pub struct Attachment {
     pub mime_type: String,
     pub size: u64,
     pub kind: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preview: Option<String>,
 }
 
@@ -72,7 +74,6 @@ pub struct CliStatus {
 
 fn resolve_claude_path() -> Option<String> {
     let mut candidates: Vec<String> = vec![
-        "claude".into(),
         "/opt/homebrew/bin/claude".into(),
         "/usr/local/bin/claude".into(),
         "/usr/bin/claude".into(),
@@ -83,52 +84,20 @@ fn resolve_claude_path() -> Option<String> {
         candidates.push(h.join(".claude/bin/claude").to_string_lossy().to_string());
         candidates.push(h.join(".claude/local/claude").to_string_lossy().to_string());
     }
+    candidates.push("claude".into());
+
     for c in &candidates {
-        if let Ok(output) = std::process::Command::new(c).arg("--version").output() {
+        if let Ok(output) = std::process::Command::new(c)
+            .arg("--version")
+            .stdin(Stdio::null())
+            .output()
+        {
             if output.status.success() {
                 return Some(c.clone());
             }
         }
     }
     None
-}
-
-pub async fn install_cli<F>(mut emit: F) -> Result<()>
-where
-    F: FnMut(String) + Send,
-{
-    emit("Claude Code native installer indiriliyor…".into());
-
-    let mut child = Command::new("sh")
-        .arg("-c")
-        .arg("curl -fsSL https://claude.ai/install.sh | bash")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-
-    if let Some(stdout) = child.stdout.take() {
-        let mut reader = BufReader::new(stdout).lines();
-        while let Some(line) = reader.next_line().await? {
-            emit(line);
-        }
-    }
-
-    let status = child.wait().await?;
-    if !status.success() {
-        let mut err = String::new();
-        if let Some(mut e) = child.stderr.take() {
-            use tokio::io::AsyncReadExt;
-            let _ = e.read_to_string(&mut err).await;
-        }
-        return Err(anyhow!(
-            "Kurulum başarısız (kod {}): {}",
-            status.code().unwrap_or(-1),
-            err.trim()
-        ));
-    }
-
-    emit("Kurulum tamamlandı.".into());
-    Ok(())
 }
 
 pub async fn check_cli() -> CliStatus {
@@ -143,6 +112,7 @@ pub async fn check_cli() -> CliStatus {
 
     let version = Command::new(&path)
         .arg("--version")
+        .stdin(Stdio::null())
         .output()
         .await
         .ok()
@@ -155,24 +125,40 @@ pub async fn check_cli() -> CliStatus {
         })
         .map(|s| s.trim().to_string());
 
-    let logged_in = match Command::new(&path)
-        .args(["-p", "ping", "--output-format", "json"])
-        .stdin(Stdio::null())
-        .output()
-        .await
-    {
-        Ok(o) => {
-            let stdout = String::from_utf8_lossy(&o.stdout);
-            o.status.success() && !stdout.contains("\"is_error\":true")
-        }
-        Err(_) => false,
-    };
+    let logged_in = check_login(&path).await;
 
     CliStatus {
         installed: true,
         version,
         logged_in,
         path: Some(path),
+    }
+}
+
+async fn check_login(path: &str) -> bool {
+    let home = match std::env::var_os("HOME") {
+        Some(h) => h,
+        None => return false,
+    };
+    let creds = Path::new(&home).join(".claude").join(".credentials.json");
+    let config = Path::new(&home).join(".claude.json");
+    if creds.exists() || config.exists() {
+        return true;
+    }
+
+    match Command::new(path)
+        .args(["config", "get", "-g", "hasCompletedOnboarding"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .await
+    {
+        Ok(o) if o.status.success() => {
+            let out = String::from_utf8_lossy(&o.stdout);
+            out.trim() == "true"
+        }
+        _ => false,
     }
 }
 
@@ -186,12 +172,17 @@ fn model_alias(model: &str) -> &str {
     }
 }
 
-pub async fn stream_messages<F>(req: ChatRequest, mut emit: F) -> Result<()>
+pub async fn stream_messages<F>(
+    req: ChatRequest,
+    abort: Arc<AtomicBool>,
+    mut emit: F,
+) -> Result<()>
 where
     F: FnMut(StreamEvent) + Send,
 {
-    let path = resolve_claude_path()
-        .ok_or_else(|| anyhow!("Claude CLI bulunamadı. `npm install -g @anthropic-ai/claude-code` ile kur."))?;
+    let path = resolve_claude_path().ok_or_else(|| {
+        anyhow!("Claude CLI bulunamadı. Ayarlardan otomatik kurulum yapabilirsin.")
+    })?;
 
     let last_user = req
         .messages
@@ -201,12 +192,12 @@ where
         .ok_or_else(|| anyhow!("user mesajı yok"))?;
 
     let prompt = extract_text_from_content(&last_user.content);
+    if prompt.trim().is_empty() {
+        return Err(anyhow!("boş prompt"));
+    }
 
     let model = model_alias(&req.model);
-    let session_id = req
-        .session_id
-        .clone()
-        .unwrap_or_else(|| uuid_v4());
+    let session_id = req.session_id.clone().unwrap_or_else(uuid_v4);
 
     let mut cmd = Command::new(&path);
     cmd.arg("-p")
@@ -226,19 +217,36 @@ where
 
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
 
     let mut child = cmd.spawn()?;
     let stdout = child
         .stdout
         .take()
         .ok_or_else(|| anyhow!("stdout açılamadı"))?;
-    let mut reader = BufReader::new(stdout).lines();
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow!("stderr açılamadı"))?;
 
-    let mut accumulated = String::new();
+    let stderr_task = tokio::spawn(async move {
+        let mut buf = String::new();
+        let _ = BufReader::new(stderr).read_to_string(&mut buf).await;
+        buf
+    });
+
+    let mut reader = BufReader::new(stdout).lines();
     let mut final_usage: Option<Usage> = None;
+    let mut got_any = false;
+    let mut aborted = false;
 
     while let Some(line) = reader.next_line().await? {
+        if abort.load(Ordering::SeqCst) {
+            let _ = child.start_kill();
+            aborted = true;
+            break;
+        }
         let line = line.trim();
         if line.is_empty() {
             continue;
@@ -259,38 +267,47 @@ where
                             .and_then(|d| d.get("text"))
                             .and_then(|t| t.as_str())
                         {
-                            accumulated.push_str(text);
+                            got_any = true;
                             emit(StreamEvent::Delta {
                                 text: text.to_string(),
                             });
                         }
-                    }
-                }
-            }
-            "assistant" => {
-                if let Some(content) = v.get("message").and_then(|m| m.get("content")) {
-                    if let Some(arr) = content.as_array() {
-                        let mut text_chunk = String::new();
-                        for block in arr {
-                            if let Some(t) = block.get("text").and_then(|s| s.as_str()) {
-                                text_chunk.push_str(t);
-                            }
-                        }
-                        if !text_chunk.is_empty() && !accumulated.contains(&text_chunk) {
-                            let new_part =
-                                text_chunk.strip_prefix(&accumulated as &str).unwrap_or("");
-                            if !new_part.is_empty() {
-                                accumulated.push_str(new_part);
-                                emit(StreamEvent::Delta {
-                                    text: new_part.to_string(),
+                    } else if etype == "message_delta" {
+                        if let Some(usage) = evt.get("usage") {
+                            if let Some(out) =
+                                usage.get("output_tokens").and_then(|x| x.as_u64())
+                            {
+                                let input = usage
+                                    .get("input_tokens")
+                                    .and_then(|x| x.as_u64())
+                                    .unwrap_or(0)
+                                    as u32;
+                                final_usage = Some(Usage {
+                                    input_tokens: input,
+                                    output_tokens: out as u32,
                                 });
                             }
                         }
                     }
                 }
             }
+            "assistant" if !got_any => {
+                if let Some(content) = v.get("message").and_then(|m| m.get("content")) {
+                    if let Some(arr) = content.as_array() {
+                        for block in arr {
+                            if let Some(t) = block.get("text").and_then(|s| s.as_str()) {
+                                emit(StreamEvent::Delta {
+                                    text: t.to_string(),
+                                });
+                                got_any = true;
+                            }
+                        }
+                    }
+                }
+            }
             "result" => {
-                let is_error = v.get("is_error").and_then(|b| b.as_bool()).unwrap_or(false);
+                let is_error =
+                    v.get("is_error").and_then(|b| b.as_bool()).unwrap_or(false);
                 if is_error {
                     let msg = v
                         .get("result")
@@ -324,17 +341,19 @@ where
     }
 
     let status = child.wait().await?;
-    if !status.success() {
-        let mut stderr_buf = String::new();
-        if let Some(mut err) = child.stderr.take() {
-            use tokio::io::AsyncReadExt;
-            let _ = err.read_to_string(&mut stderr_buf).await;
-        }
-        let msg = format!(
-            "Claude CLI çıkış kodu {}: {}",
-            status.code().unwrap_or(-1),
-            stderr_buf.trim()
-        );
+    let stderr_buf = stderr_task.await.unwrap_or_default();
+
+    if aborted {
+        emit(StreamEvent::Done {
+            usage: final_usage,
+            session_id: Some(session_id),
+        });
+    } else if !status.success() {
+        let msg = if stderr_buf.trim().is_empty() {
+            format!("Claude CLI çıkış kodu {}", status.code().unwrap_or(-1))
+        } else {
+            stderr_buf.trim().to_string()
+        };
         emit(StreamEvent::Error { error: msg });
     }
 
@@ -346,22 +365,43 @@ fn extract_text_from_content(content: &Value) -> String {
         return s.to_string();
     }
     if let Some(arr) = content.as_array() {
-        let mut out = String::new();
+        let mut text_parts = Vec::new();
+        let mut image_paths = Vec::new();
+        let mut file_paths = Vec::new();
         for block in arr {
-            if let Some(t) = block.get("text").and_then(|s| s.as_str()) {
-                if !out.is_empty() {
-                    out.push('\n');
-                }
-                out.push_str(t);
-            }
-            if block.get("type").and_then(|s| s.as_str()) == Some("image") {
-                if let Some(path) = block.get("path").and_then(|s| s.as_str()) {
-                    if !out.is_empty() {
-                        out.push('\n');
+            let btype = block.get("type").and_then(|s| s.as_str()).unwrap_or("");
+            match btype {
+                "text" => {
+                    if let Some(t) = block.get("text").and_then(|s| s.as_str()) {
+                        text_parts.push(t.to_string());
                     }
-                    out.push_str(&format!("[Görsel ekli: {}]", path));
                 }
+                "image" => {
+                    if let Some(path) = block.get("path").and_then(|s| s.as_str()) {
+                        image_paths.push(path.to_string());
+                    }
+                }
+                "file" => {
+                    if let Some(path) = block.get("path").and_then(|s| s.as_str()) {
+                        file_paths.push(path.to_string());
+                    }
+                }
+                _ => {}
             }
+        }
+
+        let mut out = text_parts.join("\n");
+        for p in image_paths {
+            if !out.is_empty() {
+                out.push_str("\n\n");
+            }
+            out.push_str(&format!("Lütfen şu görsele bak: {}", p));
+        }
+        for p in file_paths {
+            if !out.is_empty() {
+                out.push_str("\n\n");
+            }
+            out.push_str(&format!("İlgili dosya: {}", p));
         }
         return out;
     }
@@ -374,13 +414,10 @@ fn uuid_v4() -> String {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
+    let pid = std::process::id() as u128;
+    let mix = nanos.wrapping_mul(6364136223846793005).wrapping_add(pid);
     let mut bytes = [0u8; 16];
-    for (i, b) in nanos.to_le_bytes().iter().enumerate() {
-        bytes[i] = *b;
-    }
-    for i in 8..16 {
-        bytes[i] = ((nanos.rotate_left((i * 7) as u32)) as u8) ^ (i as u8);
-    }
+    bytes[..16].copy_from_slice(&mix.to_le_bytes());
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     format!(
@@ -398,54 +435,111 @@ pub async fn open_login_terminal() -> Result<()> {
 
     #[cfg(target_os = "macos")]
     {
+        let escaped = path.replace('\\', "\\\\").replace('"', "\\\"");
         let script = format!(
-            "tell application \"Terminal\" to do script \"{} login\"",
-            path.replace('"', "\\\"")
+            "tell application \"Terminal\"\nactivate\ndo script \"{} /login\"\nend tell",
+            escaped
         );
-        Command::new("osascript").arg("-e").arg(script).spawn()?;
+        Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .stdin(Stdio::null())
+            .spawn()?;
         return Ok(());
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        Command::new(&path).arg("login").spawn()?;
+        Command::new(&path).arg("/login").spawn()?;
         Ok(())
     }
 }
 
+pub async fn install_cli<F>(mut emit: F) -> Result<()>
+where
+    F: FnMut(String) + Send,
+{
+    emit("Claude Code native installer indiriliyor…".into());
+
+    let mut child = Command::new("sh")
+        .arg("-c")
+        .arg("curl -fsSL https://claude.ai/install.sh | bash")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()?;
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow!("stdout açılamadı"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow!("stderr açılamadı"))?;
+
+    let stderr_task = tokio::spawn(async move {
+        let mut buf = String::new();
+        let _ = BufReader::new(stderr).read_to_string(&mut buf).await;
+        buf
+    });
+
+    let mut reader = BufReader::new(stdout).lines();
+    while let Some(line) = reader.next_line().await? {
+        emit(line);
+    }
+
+    let status = child.wait().await?;
+    let stderr_buf = stderr_task.await.unwrap_or_default();
+
+    if !status.success() {
+        return Err(anyhow!(
+            "Kurulum başarısız (kod {}): {}",
+            status.code().unwrap_or(-1),
+            stderr_buf.trim()
+        ));
+    }
+
+    emit("Kurulum tamamlandı.".into());
+    Ok(())
+}
+
 pub fn read_attachment(path: &str) -> Result<Attachment> {
     let p = Path::new(path);
-    let metadata = std::fs::metadata(p)?;
-    let name = p
+    let canonical = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let metadata = std::fs::metadata(&canonical)?;
+    let name = canonical
         .file_name()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| path.to_string());
-    let mime = mime_guess::from_path(p)
+    let mime = mime_guess::from_path(&canonical)
         .first_or_octet_stream()
         .to_string();
 
     let kind = classify(&mime);
     let preview = match kind.as_str() {
         "image" => {
-            let bytes = std::fs::read(p)?;
-            if bytes.len() > 20 * 1024 * 1024 {
+            if metadata.len() > 20 * 1024 * 1024 {
                 return Err(anyhow!("görsel 20MB'den büyük"));
             }
+            let bytes = std::fs::read(&canonical)?;
             Some(base64::engine::general_purpose::STANDARD.encode(&bytes))
         }
         "text" => {
-            let bytes = std::fs::read(p)?;
-            if bytes.len() > 1024 * 1024 {
-                return Err(anyhow!("metin dosyası 1MB'den büyük"));
+            if metadata.len() > 1024 * 1024 {
+                None
+            } else {
+                let bytes = std::fs::read(&canonical)?;
+                String::from_utf8(bytes).ok()
             }
-            String::from_utf8(bytes).ok()
         }
         _ => None,
     };
 
     Ok(Attachment {
         name,
-        path: path.to_string(),
+        path: canonical.to_string_lossy().to_string(),
         mime_type: mime,
         size: metadata.len(),
         kind,

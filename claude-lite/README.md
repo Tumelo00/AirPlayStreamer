@@ -54,23 +54,49 @@ Biz OAuth flow yapmıyoruz, Claude CLI'nin kendi auth'una güveniyoruz. Bu hem *
 
 ## Özellikler
 
-- [x] Tauri 2 + React iskeleti
-- [x] Claude CLI subprocess wrapper (streaming JSON)
-- [x] Otomatik CLI kurulum (`curl install.sh`)
+**Çekirdek:**
+- [x] Tauri 2 + React iskeleti (lazy chunks, ErrorBoundary)
+- [x] Claude CLI subprocess wrapper (streaming, abort destekli)
+- [x] Otomatik native CLI kurulum (`curl install.sh`)
 - [x] Login akışı (Terminal'de `claude login` aç)
 - [x] Model seçimi (Opus 4.7, Sonnet 4.6, Haiku 4.5)
-- [x] Dosya sürükle-bırak (Tauri native drag-drop event)
-- [x] Görsel ekleme (görsel path CLI'ye geçer)
-- [x] Markdown render + kod syntax highlight
-- [x] SQLite ile lokal konuşma geçmişi
+- [x] Token usage göstergesi (header'da ↑/↓)
+
+**Mesajlaşma:**
+- [x] Streaming chat, **Durdur** butonu (process abort)
+- [x] Markdown + GitHub-flavored + syntax highlight
+- [x] Sticky-bottom otomatik scroll
+- [x] Memoize'li MessageBubble (büyük chat'lerde akıcı)
 - [x] Conversation continuity (`--session-id`)
-- [x] Konuşma geçmişi sidebar UI'si
-- [x] Dosya önizleme paneli (görsel + kod + PDF iframe)
-- [x] Sistem tray (Göster/Gizle/Yeni/Çıkış menüsü)
-- [x] Cmd+Shift+Space global hotkey (pencereyi toggle)
-- [x] Terminal modu (xterm.js + portable-pty wrapper)
-- [ ] MCP server listesi UI (Claude CLI zaten destekliyor)
+- [x] Otomatik başlık (ilk mesajdan)
+
+**Dosyalar:**
+- [x] Dosya sürükle-bırak (Tauri native drag-drop)
+- [x] Görsel **kopyala-yapıştır** (clipboard image → tmp file → vision)
+- [x] Dosya önizleme paneli (görsel + 20+ dil kod + PDF iframe)
+
+**Konuşma yönetimi:**
+- [x] SQLite ile lokal geçmiş
+- [x] Sidebar (daralt/genişlet, ara, seç, sil, **çift tık ile yeniden adlandır**)
+
+**OS entegrasyonu:**
+- [x] Sistem tray (Göster/Gizle/Yeni/Çıkış)
+- [x] Cmd+Shift+Space global hotkey (toggle)
+- [x] Klavye kısayolları: ⌘N yeni · ⌘T terminal · ⌘, ayarlar
+- [x] Pencere durumu hatırlama (boyut/pozisyon)
+- [x] Otomatik yeniden boyutlanan textarea
+
+**Terminal:**
+- [x] Tam pty wrapper (`portable-pty` + `@xterm/xterm`)
+- [x] Lazy loaded (chat startup'ı yavaşlatmaz)
+- [x] Chat/Terminal tab switcher
+- [x] Mode geçişlerinde session korunur
+
+**Backlog:**
+- [ ] MCP server listesi UI
 - [ ] Konuşma export (md/json)
+- [ ] Custom system prompt UI
+- [ ] Çoklu terminal sekmeleri
 
 ## Hızlı Başlangıç
 

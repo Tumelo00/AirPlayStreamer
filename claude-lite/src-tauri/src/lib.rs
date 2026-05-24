@@ -1,4 +1,5 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
@@ -13,6 +14,7 @@ mod terminal;
 pub struct AppState {
     pub db: Mutex<storage::Db>,
     pub pty: terminal::PtyManager,
+    pub abort: Arc<AtomicBool>,
 }
 
 #[tauri::command]
@@ -38,15 +40,51 @@ async fn install_claude_cli(app: tauri::AppHandle, channel: String) -> Result<()
 #[tauri::command]
 async fn send_message_stream(
     app: tauri::AppHandle,
+    state: State<'_, AppState>,
     channel: String,
     payload: claude::ChatRequest,
 ) -> Result<(), String> {
+    state.abort.store(false, Ordering::SeqCst);
+    let abort = state.abort.clone();
     let emit = move |evt: claude::StreamEvent| {
         let _ = app.emit(&channel, evt);
     };
-    claude::stream_messages(payload, emit)
+    claude::stream_messages(payload, abort, emit)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn abort_stream(state: State<'_, AppState>) {
+    state.abort.store(true, Ordering::SeqCst);
+}
+
+#[tauri::command]
+fn save_pasted_image(
+    app: AppHandle,
+    bytes: Vec<u8>,
+    mime: String,
+) -> Result<claude::Attachment, String> {
+    let dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("pasted");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let ext = match mime.as_str() {
+        "image/png" => "png",
+        "image/jpeg" => "jpg",
+        "image/gif" => "gif",
+        "image/webp" => "webp",
+        _ => "png",
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let path = dir.join(format!("pasted-{}.{}", ts, ext));
+    std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+    claude::read_attachment(&path.to_string_lossy()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -144,6 +182,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -166,6 +205,7 @@ pub fn run() {
             app.manage(AppState {
                 db: Mutex::new(db),
                 pty: terminal::PtyManager::new(),
+                abort: Arc::new(AtomicBool::new(false)),
             });
 
             let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::Space);
@@ -203,7 +243,9 @@ pub fn run() {
             open_claude_login,
             install_claude_cli,
             send_message_stream,
+            abort_stream,
             read_file_as_attachment,
+            save_pasted_image,
             list_conversations,
             load_conversation,
             save_conversation,

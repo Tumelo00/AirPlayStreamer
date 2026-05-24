@@ -15,6 +15,11 @@ export interface Message {
   createdAt: number;
 }
 
+export interface UsageInfo {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export interface Attachment {
   name: string;
   path: string;

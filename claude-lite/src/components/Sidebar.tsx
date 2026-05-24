@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   deleteConversation,
   listConversations,
+  saveConversation,
 } from "@/lib/storage";
 import type { Conversation } from "@/lib/types";
 
@@ -16,6 +17,9 @@ export function Sidebar({ activeId, onSelect, onNew, refreshKey }: Props) {
   const [items, setItems] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [query, setQuery] = useState("");
 
   const refresh = async () => {
     setLoading(true);
@@ -38,6 +42,28 @@ export function Sidebar({ activeId, onSelect, onNew, refreshKey }: Props) {
     refresh();
     if (id === activeId) onNew();
   };
+
+  const startEdit = (e: React.MouseEvent, c: Conversation) => {
+    e.stopPropagation();
+    setEditingId(c.id);
+    setEditText(c.title);
+  };
+
+  const commitEdit = async (c: Conversation) => {
+    const newTitle = editText.trim() || c.title;
+    setEditingId(null);
+    if (newTitle === c.title) return;
+    await saveConversation({ ...c, title: newTitle });
+    refresh();
+  };
+
+  const cancelEdit = () => setEditingId(null);
+
+  const filtered = query.trim()
+    ? items.filter((c) =>
+        c.title.toLowerCase().includes(query.trim().toLowerCase())
+      )
+    : items;
 
   if (collapsed) {
     return (
@@ -77,37 +103,128 @@ export function Sidebar({ activeId, onSelect, onNew, refreshKey }: Props) {
           + Yeni
         </button>
       </div>
+      <div className="px-2 py-1.5 border-b border-zinc-800/40">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Ara…"
+          className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
+        />
+      </div>
       <div className="flex-1 overflow-y-auto scrollbar-thin py-1">
         {loading && (
           <div className="text-xs text-zinc-600 px-3 py-2">Yükleniyor…</div>
         )}
-        {!loading && items.length === 0 && (
+        {!loading && filtered.length === 0 && (
           <div className="text-xs text-zinc-600 px-3 py-2">
-            Henüz konuşma yok.
+            {query.trim() ? "Sonuç yok." : "Henüz konuşma yok."}
           </div>
         )}
-        {items.map((c) => (
-          <button
+        {filtered.map((c) => (
+          <ConversationRow
             key={c.id}
-            onClick={() => onSelect(c)}
-            className={`group w-full text-left px-3 py-2 text-xs border-l-2 transition flex items-center justify-between ${
-              c.id === activeId
-                ? "bg-zinc-800/60 border-blue-500 text-zinc-100"
-                : "border-transparent text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-200"
-            }`}
-          >
-            <span className="truncate flex-1">{c.title || "Adsız sohbet"}</span>
-            <span
-              onClick={(e) => handleDelete(e, c.id)}
-              className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 ml-2 px-1"
-              role="button"
-              aria-label="Sil"
-            >
-              ×
-            </span>
-          </button>
+            conversation={c}
+            active={c.id === activeId}
+            editing={editingId === c.id}
+            editText={editText}
+            onEditTextChange={setEditText}
+            onSelect={() => onSelect(c)}
+            onStartEdit={(e) => startEdit(e, c)}
+            onCommitEdit={() => commitEdit(c)}
+            onCancelEdit={cancelEdit}
+            onDelete={(e) => handleDelete(e, c.id)}
+          />
         ))}
       </div>
+    </div>
+  );
+}
+
+function ConversationRow({
+  conversation,
+  active,
+  editing,
+  editText,
+  onEditTextChange,
+  onSelect,
+  onStartEdit,
+  onCommitEdit,
+  onCancelEdit,
+  onDelete,
+}: {
+  conversation: Conversation;
+  active: boolean;
+  editing: boolean;
+  editText: string;
+  onEditTextChange: (s: string) => void;
+  onSelect: () => void;
+  onStartEdit: (e: React.MouseEvent) => void;
+  onCommitEdit: () => void;
+  onCancelEdit: () => void;
+  onDelete: (e: React.MouseEvent) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  if (editing) {
+    return (
+      <div
+        className={`px-3 py-2 border-l-2 ${
+          active ? "border-blue-500 bg-zinc-800/60" : "border-transparent"
+        }`}
+      >
+        <input
+          ref={inputRef}
+          value={editText}
+          onChange={(e) => onEditTextChange(e.target.value)}
+          onBlur={onCommitEdit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onCommitEdit();
+            else if (e.key === "Escape") onCancelEdit();
+          }}
+          className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-0.5 text-xs focus:outline-none focus:border-blue-500"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={onSelect}
+      onDoubleClick={onStartEdit}
+      className={`group cursor-pointer px-3 py-2 text-xs border-l-2 transition flex items-center justify-between ${
+        active
+          ? "bg-zinc-800/60 border-blue-500 text-zinc-100"
+          : "border-transparent text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-200"
+      }`}
+      title="Çift tıkla: yeniden adlandır"
+    >
+      <span className="truncate flex-1">
+        {conversation.title || "Adsız sohbet"}
+      </span>
+      <span className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 ml-2">
+        <button
+          onClick={onStartEdit}
+          className="text-zinc-500 hover:text-zinc-200 px-1"
+          aria-label="Yeniden adlandır"
+        >
+          ✎
+        </button>
+        <button
+          onClick={onDelete}
+          className="text-zinc-500 hover:text-red-400 px-1"
+          aria-label="Sil"
+        >
+          ×
+        </button>
+      </span>
     </div>
   );
 }

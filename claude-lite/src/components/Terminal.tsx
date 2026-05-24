@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
-import { Terminal as XTerm } from "xterm";
+import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { openPty, type PtyHandle } from "@/lib/pty";
-import "xterm/css/xterm.css";
+import "@xterm/xterm/css/xterm.css";
 
 interface Props {
   initialCommand?: string;
