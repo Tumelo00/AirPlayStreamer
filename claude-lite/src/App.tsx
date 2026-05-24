@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { ChatHeader } from "./components/ChatHeader";
 import { FilePreview } from "./components/FilePreview";
@@ -7,7 +7,13 @@ import { MessageList } from "./components/MessageList";
 import { Settings } from "./components/Settings";
 import { Sidebar } from "./components/Sidebar";
 import { checkClaudeCli } from "./lib/claude";
-import { useChat, newConversation } from "./hooks/useChat";
+import { loadConversation, listConversations } from "./lib/storage";
+import {
+  loadPreferences,
+  savePreferences,
+  type Preferences,
+} from "./lib/preferences";
+import { useChat, newConversation, type PersistEvent } from "./hooks/useChat";
 import { MODELS, type Attachment, type Conversation } from "./lib/types";
 
 const Terminal = lazy(() =>
@@ -23,6 +29,9 @@ export default function App() {
   const [preview, setPreview] = useState<Attachment | null>(null);
   const [mode, setMode] = useState<Mode>("chat");
   const [terminalMounted, setTerminalMounted] = useState(false);
+  const [prefs, setPrefs] = useState<Preferences | null>(null);
+  const [bootstrapped, setBootstrapped] = useState(false);
+  const autoOpenedRef = useRef(false);
 
   const [initial, setInitial] = useState<Conversation>(() =>
     newConversation(MODELS[1].id)
@@ -33,11 +42,32 @@ export default function App() {
     if (mode === "terminal") setTerminalMounted(true);
   }, [mode]);
 
+  useEffect(() => {
+    (async () => {
+      const p = await loadPreferences();
+      setPrefs(p);
+      if (p.restoreLastConversation) {
+        const list = await listConversations();
+        if (list.length > 0) {
+          const last = await loadConversation(list[0].id);
+          if (last) {
+            setInitial(last);
+            setChatKey((n) => n + 1);
+          }
+        }
+      }
+      setBootstrapped(true);
+    })();
+  }, []);
+
   const verifyCli = useCallback(async () => {
     const s = await checkClaudeCli();
     const ready = s.installed && s.loggedIn;
     setNeedsLogin(!ready);
-    if (!ready) setShowSettings(true);
+    if (!ready && !autoOpenedRef.current) {
+      autoOpenedRef.current = true;
+      setShowSettings(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -45,11 +75,11 @@ export default function App() {
   }, [verifyCli]);
 
   const handleNewChat = useCallback(() => {
-    setInitial(newConversation(MODELS[1].id));
+    setInitial(newConversation(prefs?.defaultModel ?? MODELS[1].id, prefs?.defaultSystemPrompt));
     setChatKey((n) => n + 1);
     setPreview(null);
     setMode("chat");
-  }, []);
+  }, [prefs]);
 
   useEffect(() => {
     const p = listen("menu:new-chat", () => handleNewChat());
@@ -62,13 +92,14 @@ export default function App() {
     const handler = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
-      if (e.key === "n" || e.key === "N") {
+      const key = e.key.toLowerCase();
+      if (key === "n") {
         e.preventDefault();
         handleNewChat();
-      } else if (e.key === ",") {
+      } else if (key === ",") {
         e.preventDefault();
         setShowSettings(true);
-      } else if (e.key === "t" || e.key === "T") {
+      } else if (key === "t" && !e.shiftKey) {
         e.preventDefault();
         setMode((m) => (m === "chat" ? "terminal" : "chat"));
       }
@@ -84,10 +115,27 @@ export default function App() {
     setMode("chat");
   };
 
-  const handlePersisted = () => setRefreshKey((n) => n + 1);
+  const handlePersisted = useCallback((event: PersistEvent) => {
+    if (event.isNew || event.titleChanged) {
+      setRefreshKey((n) => n + 1);
+    }
+  }, []);
+
+  const handlePrefsChange = useCallback(async (p: Preferences) => {
+    setPrefs(p);
+    await savePreferences(p);
+  }, []);
+
+  if (!bootstrapped) {
+    return (
+      <div className="flex h-full items-center justify-center text-zinc-500 text-sm">
+        Yükleniyor…
+      </div>
+    );
+  }
 
   return (
-    <div className="flex h-full">
+    <div className={`flex h-full ${prefs?.theme === "light" ? "theme-light" : ""}`}>
       <Sidebar
         activeId={initial.id}
         onSelect={handleSelect}
@@ -123,7 +171,7 @@ export default function App() {
                   </div>
                 }
               >
-                <Terminal />
+                <Terminal cwd={prefs?.workspaceDir} />
               </Suspense>
             )}
           </div>
@@ -132,8 +180,10 @@ export default function App() {
           <FilePreview attachment={preview} onClose={() => setPreview(null)} />
         )}
       </div>
-      {showSettings && (
+      {showSettings && prefs && (
         <Settings
+          prefs={prefs}
+          onPrefsChange={handlePrefsChange}
           onClose={() => {
             setShowSettings(false);
             verifyCli();
@@ -161,7 +211,7 @@ function ModeTabs({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void 
         </button>
       ))}
       <div className="ml-auto text-[10px] text-zinc-600 self-center pr-2">
-        ⌘N yeni · ⌘T terminal · ⌘, ayarlar · ⌘⇧Space toggle
+        ⌘N · ⌘T · ⌘, · ⌘⇧Space
       </div>
     </div>
   );
@@ -172,7 +222,7 @@ interface ChatPaneProps {
   needsLogin: boolean;
   onOpenSettings: () => void;
   onNewChat: () => void;
-  onPersisted: () => void;
+  onPersisted: (e: PersistEvent) => void;
   onPreview: (a: Attachment) => void;
 }
 
@@ -184,13 +234,23 @@ function ChatPane({
   onPersisted,
   onPreview,
 }: ChatPaneProps) {
-  const { conversation, streaming, error, usage, sendMessage, stop, setModel } =
-    useChat(initial, onPersisted);
+  const {
+    conversation,
+    streaming,
+    error,
+    usage,
+    sendMessage,
+    stop,
+    setModel,
+    setSystemPrompt,
+  } = useChat(initial, onPersisted);
 
   return (
     <div className="flex flex-col flex-1 min-w-0">
       <ChatHeader
         model={conversation.model}
+        systemPrompt={conversation.systemPrompt}
+        onSystemPromptChange={setSystemPrompt}
         onModelChange={setModel}
         onOpenSettings={onOpenSettings}
         onNewChat={onNewChat}

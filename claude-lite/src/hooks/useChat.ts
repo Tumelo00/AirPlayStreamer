@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { abortStream, sendMessageStream } from "@/lib/claude";
 import { saveConversation } from "@/lib/storage";
 import type {
@@ -14,19 +14,31 @@ const newId = () =>
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-export function useChat(initial: Conversation, onPersisted?: () => void) {
+export interface PersistEvent {
+  isNew: boolean;
+  titleChanged: boolean;
+}
+
+export function useChat(
+  initial: Conversation,
+  onPersisted?: (event: PersistEvent) => void
+) {
   const [conversation, setConversation] = useState<Conversation>(initial);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
 
+  const convRef = useRef(conversation);
+  convRef.current = conversation;
+  const firstSaveRef = useRef(true);
+
   const sendMessage = useCallback(
     async (text: string, attachments: Attachment[] = []) => {
       if (streaming) return;
-      if (!text.trim() && attachments.length === 0) return;
+      const trimmed = text.trim();
+      if (!trimmed && attachments.length === 0) return;
       setError(null);
 
-      const trimmed = text.trim();
       const userMsg: Message = {
         id: newId(),
         role: "user",
@@ -41,33 +53,28 @@ export function useChat(initial: Conversation, onPersisted?: () => void) {
         createdAt: Date.now(),
       };
 
-      let snapshot: Conversation | null = null;
-      setConversation((c) => {
-        const next: Conversation = {
-          ...c,
-          messages: [...c.messages, userMsg, assistantMsg],
-          updatedAt: Date.now(),
-        };
-        snapshot = next;
-        return next;
-      });
-      if (!snapshot) return;
+      const baseConv = convRef.current;
+      const messagesForApi = [...baseConv.messages, userMsg];
+
+      setConversation((c) => ({
+        ...c,
+        messages: [...c.messages, userMsg, assistantMsg],
+        updatedAt: Date.now(),
+      }));
 
       setStreaming(true);
 
       let buffer = "";
-      let resolvedSessionId = snapshot!.sessionId;
+      let resolvedSessionId = baseConv.sessionId;
       let failed = false;
 
       try {
         await sendMessageStream(
           {
-            model: snapshot!.model as ModelId,
-            systemPrompt: snapshot!.systemPrompt,
-            sessionId: snapshot!.sessionId,
-            messages: snapshot!.messages.filter(
-              (m) => m.id !== assistantMsg.id
-            ),
+            model: baseConv.model as ModelId,
+            systemPrompt: baseConv.systemPrompt,
+            sessionId: baseConv.sessionId,
+            messages: messagesForApi,
           },
           (e) => {
             if (e.type === "delta" && e.text) {
@@ -98,12 +105,14 @@ export function useChat(initial: Conversation, onPersisted?: () => void) {
       } finally {
         setStreaming(false);
         setConversation((current) => {
+          const oldTitle = current.title;
+          const newTitle =
+            oldTitle === "Yeni sohbet" && trimmed
+              ? trimmed.slice(0, 60)
+              : oldTitle;
           const finalConv: Conversation = {
             ...current,
-            title:
-              current.title === "Yeni sohbet" && trimmed
-                ? trimmed.slice(0, 60)
-                : current.title,
+            title: newTitle,
             sessionId: resolvedSessionId,
             messages: current.messages.map((m) =>
               m.id === assistantMsg.id ? { ...m, content: buffer } : m
@@ -111,8 +120,11 @@ export function useChat(initial: Conversation, onPersisted?: () => void) {
             updatedAt: Date.now(),
           };
           if (!failed || buffer.length > 0) {
+            const isNew = firstSaveRef.current;
+            const titleChanged = newTitle !== oldTitle;
+            firstSaveRef.current = false;
             saveConversation(finalConv)
-              .then(() => onPersisted?.())
+              .then(() => onPersisted?.({ isNew, titleChanged }))
               .catch(() => {});
           }
           return finalConv;
@@ -130,14 +142,31 @@ export function useChat(initial: Conversation, onPersisted?: () => void) {
     setConversation((c) => ({ ...c, model }));
   }, []);
 
-  return { conversation, streaming, error, usage, sendMessage, stop, setModel };
+  const setSystemPrompt = useCallback((systemPrompt: string) => {
+    setConversation((c) => ({
+      ...c,
+      systemPrompt: systemPrompt.trim() ? systemPrompt : undefined,
+    }));
+  }, []);
+
+  return {
+    conversation,
+    streaming,
+    error,
+    usage,
+    sendMessage,
+    stop,
+    setModel,
+    setSystemPrompt,
+  };
 }
 
-export function newConversation(model: string): Conversation {
+export function newConversation(model: string, systemPrompt?: string): Conversation {
   return {
     id: newId(),
     title: "Yeni sohbet",
     model,
+    systemPrompt,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     messages: [],

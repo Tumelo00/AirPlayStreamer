@@ -182,6 +182,7 @@ fn model_alias(model: &str) -> &str {
 pub async fn stream_messages<F>(
     req: ChatRequest,
     abort: Arc<AtomicBool>,
+    cwd: Option<String>,
     mut emit: F,
 ) -> Result<()>
 where
@@ -220,6 +221,12 @@ where
 
     if let Some(sys) = req.system.as_ref().filter(|s| !s.is_empty()) {
         cmd.arg("--append-system-prompt").arg(sys);
+    }
+
+    if let Some(dir) = cwd.as_ref().filter(|s| !s.is_empty()) {
+        if Path::new(dir).is_dir() {
+            cmd.current_dir(dir);
+        }
     }
 
     cmd.stdin(Stdio::null())

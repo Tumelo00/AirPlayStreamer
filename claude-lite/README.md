@@ -92,11 +92,19 @@ Biz OAuth flow yapmıyoruz, Claude CLI'nin kendi auth'una güveniyoruz. Bu hem *
 - [x] Chat/Terminal tab switcher
 - [x] Mode geçişlerinde session korunur
 
+**Yapılandırma (v0.3):**
+- [x] MCP server listesi UI (Settings → MCP)
+- [x] Konuşma export (markdown, sidebar ↓ butonu)
+- [x] Custom system prompt UI (header'da · prompt butonu, per-sohbet)
+- [x] Varsayılan sistem promptu (Settings → Genel)
+- [x] Workspace selector (Settings → Genel → çalışma dizini, claude + terminal cwd)
+- [x] Tema toggle (koyu/açık)
+- [x] Son konuşmayı geri yükle (açılışta)
+
 **Backlog:**
-- [ ] MCP server listesi UI
-- [ ] Konuşma export (md/json)
-- [ ] Custom system prompt UI
 - [ ] Çoklu terminal sekmeleri
+- [ ] Conversation pinning
+- [ ] Cmd+K hızlı arama
 
 ## Hızlı Başlangıç
 

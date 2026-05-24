@@ -21,7 +21,7 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-window-state = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "fs", "time"] }
 portable-pty = "0.8"
 rusqlite = { version = "0.32", features = ["bundled"] }
 base64 = "0.22"
@@ -32,7 +32,13 @@ tracing-subscriber = "0.3"
 
 [profile.release]
 opt-level = "z"
-lto = true
+lto = "fat"
 codegen-units = 1
-strip = true
+strip = "symbols"
 panic = "abort"
+incremental = false
+
+[profile.dev]
+opt-level = 1
+debug = 1
+incremental = true

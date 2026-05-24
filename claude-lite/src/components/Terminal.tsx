@@ -8,9 +8,10 @@ import "@xterm/xterm/css/xterm.css";
 interface Props {
   initialCommand?: string;
   shell?: string;
+  cwd?: string;
 }
 
-export function Terminal({ initialCommand, shell }: Props) {
+export function Terminal({ initialCommand, shell, cwd }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const ptyRef = useRef<PtyHandle | null>(null);
@@ -60,6 +61,7 @@ export function Terminal({ initialCommand, shell }: Props) {
         cols: term.cols,
         rows: term.rows,
         shell,
+        cwd,
       });
       if (disposed) {
         handle.close().catch(() => {});
@@ -101,7 +103,7 @@ export function Terminal({ initialCommand, shell }: Props) {
       ptyRef.current?.close().catch(() => {});
       term.dispose();
     };
-  }, [initialCommand, shell]);
+  }, [initialCommand, shell, cwd]);
 
   return (
     <div className="flex-1 bg-[#09090b] overflow-hidden">

@@ -8,6 +8,7 @@ use tauri::{
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 mod claude;
+mod preferences;
 mod storage;
 mod terminal;
 
@@ -15,6 +16,7 @@ pub struct AppState {
     pub db: Mutex<storage::Db>,
     pub pty: terminal::PtyManager,
     pub abort: Arc<AtomicBool>,
+    pub data_dir: std::path::PathBuf,
 }
 
 #[tauri::command]
@@ -51,10 +53,13 @@ async fn send_message_stream(
 ) -> Result<(), String> {
     state.abort.store(false, Ordering::SeqCst);
     let abort = state.abort.clone();
+    let cwd = preferences::load(&state.data_dir)
+        .ok()
+        .and_then(|p| p.workspace_dir);
     let emit = move |evt: claude::StreamEvent| {
         let _ = app.emit(&channel, evt);
     };
-    claude::stream_messages(payload, abort, emit)
+    claude::stream_messages(payload, abort, cwd, emit)
         .await
         .map_err(|e| e.to_string())
 }
@@ -128,6 +133,19 @@ fn delete_conversation(state: State<'_, AppState>, id: String) -> Result<(), Str
 }
 
 #[tauri::command]
+fn load_preferences(state: State<'_, AppState>) -> Result<preferences::Preferences, String> {
+    preferences::load(&state.data_dir).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_preferences(
+    state: State<'_, AppState>,
+    preferences: preferences::Preferences,
+) -> Result<(), String> {
+    preferences::save(&state.data_dir, &preferences).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn pty_open(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -177,8 +195,33 @@ fn toggle_main_window(app: &AppHandle) {
     }
 }
 
+fn cleanup_pasted_images(app: &AppHandle) {
+    let Ok(cache) = app.path().app_cache_dir() else {
+        return;
+    };
+    let dir = cache.join("pasted");
+    if !dir.exists() {
+        return;
+    }
+    let cutoff = std::time::SystemTime::now()
+        .checked_sub(std::time::Duration::from_secs(7 * 24 * 60 * 60));
+    let Some(cutoff) = cutoff else { return };
+
+    let Ok(entries) = std::fs::read_dir(&dir) else { return };
+    for entry in entries.flatten() {
+        if let Ok(meta) = entry.metadata() {
+            if let Ok(modified) = meta.modified() {
+                if modified < cutoff {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(debug_assertions)]
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .init();
@@ -211,12 +254,16 @@ pub fn run() {
                 db: Mutex::new(db),
                 pty: terminal::PtyManager::new(),
                 abort: Arc::new(AtomicBool::new(false)),
+                data_dir: data_dir.clone(),
             });
 
             let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::Space);
-            if let Err(e) = app.global_shortcut().register(shortcut) {
-                tracing::warn!("Global shortcut kaydedilemedi: {}", e);
+            if let Err(_e) = app.global_shortcut().register(shortcut) {
+                #[cfg(debug_assertions)]
+                tracing::warn!("Global shortcut kaydedilemedi: {}", _e);
             }
+
+            cleanup_pasted_images(app.handle());
 
             let show_item = MenuItem::with_id(app, "show", "Göster / Gizle", true, None::<&str>)?;
             let new_item = MenuItem::with_id(app, "new", "Yeni Sohbet", true, None::<&str>)?;
@@ -256,6 +303,8 @@ pub fn run() {
             load_conversation,
             save_conversation,
             delete_conversation,
+            load_preferences,
+            save_preferences,
             pty_open,
             pty_write,
             pty_resize,

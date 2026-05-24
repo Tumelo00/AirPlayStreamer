@@ -1,6 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { SyntaxHighlighter, oneDark } from "@/lib/highlight";
 import type { Attachment } from "@/lib/types";
 
 interface Props {
