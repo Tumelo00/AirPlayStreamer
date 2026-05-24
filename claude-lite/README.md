@@ -121,24 +121,37 @@ Biz OAuth flow yapmıyoruz, Claude CLI'nin kendi auth'una güveniyoruz. Bu hem *
 - [ ] Cmd+K hızlı arama
 - [ ] Conversation summarization (uzun sohbetler için)
 
-## Hızlı Başlangıç
+## Kurulum (Son Kullanıcı)
 
-`SETUP_MACOS.md` dosyasına bak — adım adım kurulum var.
+İki seçenek var:
 
-Özetle:
+### A) Hazır .DMG indir (önerilen)
+
+1. GitHub Actions sayfasına git → **Build Claude Lite (macOS)** workflow → en son başarılı run
+2. Sayfanın altındaki **Artifacts** bölümünden `claude-lite-aarch64-apple-darwin-dmg` indir (Apple Silicon Mac için; Intel Mac için x86_64 build manuel tetiklenmeli)
+3. ZIP'i aç → içindeki `.dmg`'ye çift tıkla
+4. Açılan pencerede **Claude Lite** ikonunu **Applications** klasörüne sürükle
+5. İlk açışta macOS imzasız uygulamayı engeller → Applications'tan **sağ tık → Aç → tekrar Aç**
+6. Uygulama açıldığında otomatik olarak Claude CLI kurulumunu önerir (tek tıkla); sonra Claude hesabınla giriş yap
+
+> **Release** olarak çıkarmak için: `git tag claude-lite-v0.1.0 && git push --tags` — workflow otomatik GitHub Release oluşturur, kalıcı indirme linki olur.
+
+### B) Kendin derle (geliştirici)
+
+`SETUP_MACOS.md` dosyasına bak — adım adım kurulum var. Özetle:
 
 ```bash
-# 1. Bağımlılıkları kur
+cd claude-lite
 npm install
-cargo install tauri-cli --version "^2.0"
-
-# 2. Dev modunda aç
-npm run tauri dev
+npm run tauri dev   # geliştirme
+npm run tauri build # üretim .dmg
 ```
 
-İlk açılışta uygulama Claude CLI durumunu kontrol eder:
-- CLI yoksa → tek tıkla otomatik kurulum
-- CLI varsa ama login değilsen → "Login Aç" butonu Terminal'de `claude login` açar
+## İlk Açılış Akışı
+
+Uygulama Claude CLI durumunu kontrol eder:
+- CLI yoksa → tek tıkla otomatik kurulum (`curl install.sh`)
+- CLI varsa ama login değilsen → "Login Aç" Terminal'de `claude login` açar
 - Her şey hazırsa → direkt chat'e başla
 
 ## Lisans

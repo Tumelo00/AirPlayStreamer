@@ -1,0 +1,133 @@
+name: Build Claude Lite (macOS)
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+    paths:
+      - "claude-lite/**"
+      - ".github/workflows/build-claude-lite-macos.yml"
+    tags:
+      - "claude-lite-v*"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Build hedefi"
+        required: false
+        default: "aarch64-apple-darwin"
+        type: choice
+        options:
+          - "aarch64-apple-darwin"
+          - "x86_64-apple-darwin"
+          - "universal-apple-darwin"
+
+concurrency:
+  group: claude-lite-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build .dmg
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: claude-lite
+
+    env:
+      TARGET: ${{ github.event.inputs.target || 'aarch64-apple-darwin' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "claude-lite/src-tauri -> target"
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('claude-lite/package.json') }}
+          restore-keys: |
+            npm-${{ runner.os }}-
+
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Generate icons (placeholder)
+        run: |
+          set -e
+          if [ ! -f "src-tauri/icons/icon.icns" ]; then
+            echo "Icon yok, placeholder oluşturuluyor..."
+            mkdir -p src-tauri/icons
+            ICON_SRC="/tmp/cl-icon.png"
+            curl -fsSL -o "$ICON_SRC" \
+              https://raw.githubusercontent.com/tauri-apps/tauri/dev/examples/api/src-tauri/icons/icon.png \
+              || curl -fsSL -o "$ICON_SRC" \
+                 https://raw.githubusercontent.com/tauri-apps/tauri/v1/examples/api/src-tauri/icons/icon.png
+            npx --yes @tauri-apps/cli icon "$ICON_SRC"
+          else
+            echo "Mevcut icon'lar kullanılacak."
+          fi
+
+      - name: Build app (${{ env.TARGET }})
+        run: npx --yes @tauri-apps/cli build --target "$TARGET"
+
+      - name: List build artifacts
+        if: always()
+        run: |
+          echo "=== Bundle dizini ==="
+          find src-tauri/target -name "*.dmg" -o -name "*.app" 2>/dev/null | head -20 || true
+
+      - name: Upload .dmg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-lite-${{ env.TARGET }}-dmg
+          path: |
+            claude-lite/src-tauri/target/${{ env.TARGET }}/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload .app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-lite-${{ env.TARGET }}-app
+          path: |
+            claude-lite/src-tauri/target/${{ env.TARGET }}/release/bundle/macos/*.app
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/claude-lite-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Claude Lite ${{ github.ref_name }}"
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            claude-lite/src-tauri/target/${{ env.TARGET }}/release/bundle/dmg/*.dmg
+          body: |
+            ## Kurulum
+
+            1. Aşağıdan `.dmg` dosyasını indir
+            2. Çift tıkla, açılan pencerede **Claude Lite**'ı **Applications** klasörüne sürükle
+            3. İlk açışta macOS imzasız uygulamayı engeller — Applications'tan **sağ tık → Aç** → tekrar **Aç**
+            4. Uygulama açılınca otomatik olarak `claude` CLI kurulumunu önerir (tek tıkla); sonra Claude.ai hesabınla giriş
+
+            > İmzalanmış (notarize) sürüm için Apple Developer hesabı gerek ($99/yıl). Şimdilik unsigned dağıtım yapıyoruz; ev kullanımı için sorun değil.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
