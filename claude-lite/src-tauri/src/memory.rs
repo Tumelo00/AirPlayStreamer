@@ -17,11 +17,7 @@ pub fn save(dir: &Path, content: &str) -> Result<()> {
     std::fs::create_dir_all(dir)?;
     let path = dir.join(FILENAME);
     let tmp = dir.join(format!("{}.tmp", FILENAME));
-    let trimmed = if content.len() > MAX_BYTES {
-        &content[..MAX_BYTES]
-    } else {
-        content
-    };
+    let trimmed = truncate_to_char_boundary(content, MAX_BYTES);
     std::fs::write(&tmp, trimmed)?;
     std::fs::rename(&tmp, &path)?;
     Ok(())
@@ -36,18 +32,61 @@ pub fn append(dir: &Path, entry: &str) -> Result<()> {
     };
 
     while new_content.len() > MAX_BYTES {
-        if let Some(first_sep) = new_content.find("\n## ") {
-            if let Some(second_sep_rel) = new_content[first_sep + 4..].find("\n## ") {
-                new_content =
-                    new_content[first_sep + 4 + second_sep_rel + 1..].to_string();
-                continue;
+        let drop_until = find_second_entry_start(&new_content);
+        match drop_until {
+            Some(idx) => {
+                new_content = new_content[idx..].to_string();
+            }
+            None => {
+                let safe_start = floor_char_boundary(
+                    &new_content,
+                    new_content.len().saturating_sub(MAX_BYTES),
+                );
+                new_content = new_content[safe_start..].to_string();
+                break;
             }
         }
-        new_content = new_content[new_content.len() - MAX_BYTES..].to_string();
-        break;
     }
 
     save(dir, &new_content)
+}
+
+fn find_second_entry_start(s: &str) -> Option<usize> {
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    let mut headers_seen = 0;
+    while i + 3 < bytes.len() {
+        let at_line_start = i == 0 || bytes[i - 1] == b'\n';
+        if at_line_start && &bytes[i..i + 3] == b"## " {
+            headers_seen += 1;
+            if headers_seen == 2 {
+                return Some(i);
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+fn truncate_to_char_boundary(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
+fn floor_char_boundary(s: &str, mut idx: usize) -> usize {
+    if idx >= s.len() {
+        return s.len();
+    }
+    while idx > 0 && !s.is_char_boundary(idx) {
+        idx -= 1;
+    }
+    idx
 }
 
 pub fn merge_into_system_prompt(memory: &str, user_prompt: Option<&str>) -> Option<String> {
@@ -80,4 +119,28 @@ pub fn read_workspace_claude_md(workspace: &Path) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_handles_utf8_boundaries() {
+        let s = "merhabaüğşıçÖ".repeat(100);
+        for limit in [10, 100, 500, 1000] {
+            let out = truncate_to_char_boundary(&s, limit);
+            assert!(out.len() <= limit);
+            assert!(std::str::from_utf8(out.as_bytes()).is_ok());
+        }
+    }
+
+    #[test]
+    fn floor_char_boundary_works() {
+        let s = "üğşı";
+        assert_eq!(floor_char_boundary(s, 0), 0);
+        assert_eq!(floor_char_boundary(s, 1), 0);
+        assert_eq!(floor_char_boundary(s, 2), 2);
+        assert_eq!(floor_char_boundary(s, s.len()), s.len());
+    }
 }

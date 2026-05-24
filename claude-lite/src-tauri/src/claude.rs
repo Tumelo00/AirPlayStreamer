@@ -507,8 +507,8 @@ pub async fn open_login_terminal() -> Result<()> {
     {
         let escaped = path.replace('\\', "\\\\").replace('"', "\\\"");
         let script = format!(
-            "tell application \"Terminal\"\nactivate\ndo script \"{} /login\"\nend tell",
-            escaped
+            "tell application \"Terminal\"\nactivate\ndo script \"{} /login || {} auth login || {}\"\nend tell",
+            escaped, escaped, escaped
         );
         Command::new("osascript")
             .arg("-e")
@@ -520,7 +520,7 @@ pub async fn open_login_terminal() -> Result<()> {
 
     #[cfg(not(target_os = "macos"))]
     {
-        Command::new(&path).arg("/login").spawn()?;
+        Command::new(&path).spawn()?;
         Ok(())
     }
 }

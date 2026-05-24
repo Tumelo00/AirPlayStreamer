@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   loadMemory,
   readWorkspaceClaudeMd,
@@ -21,6 +21,8 @@ export function MemoryPanel({ workspaceDir }: Props) {
   const [claudeMdDirty, setClaudeMdDirty] = useState(false);
   const [claudeMdSaving, setClaudeMdSaving] = useState(false);
   const [claudeMdStatus, setClaudeMdStatus] = useState<string | null>(null);
+  const memTimerRef = useRef<number | null>(null);
+  const cmdTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     loadMemory()
@@ -29,6 +31,11 @@ export function MemoryPanel({ workspaceDir }: Props) {
         setMemoryLoaded(true);
       })
       .catch(() => setMemoryLoaded(true));
+
+    return () => {
+      if (memTimerRef.current !== null) clearTimeout(memTimerRef.current);
+      if (cmdTimerRef.current !== null) clearTimeout(cmdTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -44,11 +51,15 @@ export function MemoryPanel({ workspaceDir }: Props) {
   const saveMem = async () => {
     setMemorySaving(true);
     setMemoryStatus(null);
+    if (memTimerRef.current !== null) clearTimeout(memTimerRef.current);
     try {
       await saveMemory(memory);
       setMemoryDirty(false);
       setMemoryStatus("Kaydedildi.");
-      setTimeout(() => setMemoryStatus(null), 2000);
+      memTimerRef.current = window.setTimeout(() => {
+        setMemoryStatus(null);
+        memTimerRef.current = null;
+      }, 2000);
     } catch (e) {
       setMemoryStatus(`Hata: ${e}`);
     } finally {
@@ -60,11 +71,15 @@ export function MemoryPanel({ workspaceDir }: Props) {
     if (claudeMd === null) return;
     setClaudeMdSaving(true);
     setClaudeMdStatus(null);
+    if (cmdTimerRef.current !== null) clearTimeout(cmdTimerRef.current);
     try {
       await writeWorkspaceClaudeMd(claudeMd);
       setClaudeMdDirty(false);
       setClaudeMdStatus("Kaydedildi.");
-      setTimeout(() => setClaudeMdStatus(null), 2000);
+      cmdTimerRef.current = window.setTimeout(() => {
+        setClaudeMdStatus(null);
+        cmdTimerRef.current = null;
+      }, 2000);
     } catch (e) {
       setClaudeMdStatus(`Hata: ${e}`);
     } finally {

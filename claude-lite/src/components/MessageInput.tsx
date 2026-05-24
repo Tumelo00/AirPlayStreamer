@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { readFileAsAttachment, savePastedImage } from "@/lib/claude";
 import type { Attachment } from "@/lib/types";
 
@@ -18,7 +18,7 @@ export function MessageInput({ onSend, onStop, streaming, disabled }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    const win = getCurrentWindow();
+    const win = getCurrentWebviewWindow();
     const promise = win.onDragDropEvent(async (event) => {
       if (event.payload.type === "over") {
         setDragOver(true);

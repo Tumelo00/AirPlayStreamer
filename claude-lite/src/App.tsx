@@ -8,7 +8,7 @@ import { Settings } from "./components/Settings";
 import { Sidebar } from "./components/Sidebar";
 import { checkClaudeCli } from "./lib/claude";
 import { appendMemory, formatMemoryEntry } from "./lib/memory";
-import { loadConversation, listConversations } from "./lib/storage";
+import { listConversations } from "./lib/storage";
 import {
   loadPreferences,
   savePreferences,
@@ -48,13 +48,14 @@ export default function App() {
       const p = await loadPreferences();
       setPrefs(p);
       if (p.restoreLastConversation) {
-        const list = await listConversations();
-        if (list.length > 0) {
-          const last = await loadConversation(list[0].id);
-          if (last) {
-            setInitial(last);
+        try {
+          const list = await listConversations();
+          if (list.length > 0) {
+            setInitial(list[0]);
             setChatKey((n) => n + 1);
           }
+        } catch {
+          // ignore, fresh conversation kullanılır
         }
       }
       setBootstrapped(true);
@@ -116,10 +117,23 @@ export default function App() {
     setMode("chat");
   };
 
-  const handlePersisted = useCallback((event: PersistEvent) => {
-    if (event.isNew || event.titleChanged) {
-      setRefreshKey((n) => n + 1);
+  const handlePersistedTimerRef = useRef<number | null>(null);
+  const handlePersisted = useCallback((_event: PersistEvent) => {
+    if (handlePersistedTimerRef.current !== null) {
+      clearTimeout(handlePersistedTimerRef.current);
     }
+    handlePersistedTimerRef.current = window.setTimeout(() => {
+      setRefreshKey((n) => n + 1);
+      handlePersistedTimerRef.current = null;
+    }, 300);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (handlePersistedTimerRef.current !== null) {
+        clearTimeout(handlePersistedTimerRef.current);
+      }
+    };
   }, []);
 
   const handlePrefsChange = useCallback(async (p: Preferences) => {

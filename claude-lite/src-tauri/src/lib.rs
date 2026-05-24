@@ -342,7 +342,8 @@ pub fn run() {
                 tracing::warn!("Global shortcut kaydedilemedi: {}", _e);
             }
 
-            cleanup_pasted_images(app.handle());
+            let handle_for_cleanup = app.app_handle().clone();
+            cleanup_pasted_images(&handle_for_cleanup);
 
             let show_item = MenuItem::with_id(app, "show", "Göster / Gizle", true, None::<&str>)?;
             let new_item = MenuItem::with_id(app, "new", "Yeni Sohbet", true, None::<&str>)?;

@@ -45,13 +45,15 @@ export function useChat(
 
   const convRef = useRef(conversation);
   convRef.current = conversation;
-  const firstSaveRef = useRef(true);
+  const firstSaveRef = useRef(initial.messages.length === 0);
+  const inFlightRef = useRef(false);
 
   const sendMessage = useCallback(
     async (text: string, attachments: Attachment[] = []) => {
-      if (streaming) return;
+      if (inFlightRef.current) return;
       const trimmed = text.trim();
       if (!trimmed && attachments.length === 0) return;
+      inFlightRef.current = true;
       setError(null);
 
       const userMsg: Message = {
@@ -119,34 +121,38 @@ export function useChat(
         setError(String(err));
       } finally {
         setStreaming(false);
-        setConversation((current) => {
-          const oldTitle = current.title;
-          const newTitle =
-            oldTitle === "Yeni sohbet" && trimmed
-              ? trimmed.slice(0, 60)
-              : oldTitle;
-          const finalConv: Conversation = {
-            ...current,
-            title: newTitle,
-            sessionId: resolvedSessionId,
-            messages: current.messages.map((m) =>
-              m.id === assistantMsg.id ? { ...m, content: buffer } : m
-            ),
-            updatedAt: Date.now(),
-          };
-          if (!failed || buffer.length > 0) {
-            const isNew = firstSaveRef.current;
-            const titleChanged = newTitle !== oldTitle;
-            firstSaveRef.current = false;
-            saveConversation(stripPreviewsForStorage(finalConv))
-              .then(() => onPersisted?.({ isNew, titleChanged }))
-              .catch(() => {});
-          }
-          return finalConv;
-        });
+        inFlightRef.current = false;
+
+        const current = convRef.current;
+        const oldTitle = current.title;
+        const newTitle =
+          oldTitle === "Yeni sohbet" && trimmed
+            ? trimmed.slice(0, 60)
+            : oldTitle;
+
+        const finalConv: Conversation = {
+          ...current,
+          title: newTitle,
+          sessionId: resolvedSessionId,
+          messages: current.messages.map((m) =>
+            m.id === assistantMsg.id ? { ...m, content: buffer } : m
+          ),
+          updatedAt: Date.now(),
+        };
+
+        setConversation(finalConv);
+
+        if (!failed || buffer.length > 0) {
+          const isNew = firstSaveRef.current;
+          const titleChanged = newTitle !== oldTitle;
+          firstSaveRef.current = false;
+          saveConversation(stripPreviewsForStorage(finalConv))
+            .then(() => onPersisted?.({ isNew, titleChanged }))
+            .catch(() => {});
+        }
       }
     },
-    [streaming, onPersisted]
+    [onPersisted]
   );
 
   const stop = useCallback(() => {
@@ -158,17 +164,15 @@ export function useChat(
   }, []);
 
   const setSystemPrompt = useCallback((systemPrompt: string) => {
-    setConversation((c) => {
-      const next: Conversation = {
-        ...c,
-        systemPrompt: systemPrompt.trim() ? systemPrompt : undefined,
-        updatedAt: Date.now(),
-      };
-      if (c.messages.length > 0) {
-        saveConversation(stripPreviewsForStorage(next)).catch(() => {});
-      }
-      return next;
-    });
+    const next: Conversation = {
+      ...convRef.current,
+      systemPrompt: systemPrompt.trim() ? systemPrompt : undefined,
+      updatedAt: Date.now(),
+    };
+    setConversation(next);
+    if (next.messages.length > 0) {
+      saveConversation(stripPreviewsForStorage(next)).catch(() => {});
+    }
   }, []);
 
   const toggleMemoryMode = useCallback(() => setMemoryMode((v) => !v), []);
